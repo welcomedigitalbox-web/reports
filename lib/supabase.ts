@@ -7,7 +7,6 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 // profiles, stores and the approval helpers are shared, which is the point
 // of not standing up a second database.
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  db: { schema: "reporting" },
   global: {
     headers: {
       "Accept-Profile": "reporting",
