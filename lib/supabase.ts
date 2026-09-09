@@ -8,6 +8,12 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 // of not standing up a second database.
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   db: { schema: "reporting" },
+  global: {
+    headers: {
+      "Accept-Profile": "reporting",
+      "Content-Profile": "reporting",
+    },
+  },
 });
 
 // A second client for the POS side of the same database - profiles, stores,
