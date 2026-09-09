@@ -20,6 +20,9 @@ export default function DashboardPage() {
   const [rows, setRows] = useState<Submission[]>([]);
   const [forms, setForms] = useState<ReportForm[]>([]);
   const [picked, setPicked] = useState<string[]>([]);
+  // Eight departments open at once is a wall. The one that needs the
+  // owner - anything still waiting - opens itself; the rest fold away.
+  const [openDept, setOpenDept] = useState<string | null>(null);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -125,9 +128,25 @@ export default function DashboardPage() {
       )}
 
       {byDept.map(([dept, list]) => (
-        <section key={dept} className="mb-4">
-          <h2 className="text-sm font-medium capitalize mb-2">{dept}</h2>
-          <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
+        <section key={dept} className="mb-3">
+          <button
+            onClick={() => setOpenDept(openDept === dept ? null : dept)}
+            className="w-full flex items-center gap-2 px-1 py-2 text-left"
+          >
+            <span className="text-slate-400 w-3">
+              {openDept === dept ? "\u2212" : "+"}
+            </span>
+            <span className="text-sm font-medium capitalize">{dept}</span>
+            <span className="text-xs text-slate-400">({list.length})</span>
+            {list.some((x) => x.sub.status === "approved") && (
+              <span className="ml-auto text-xs text-blue-600 font-medium">
+                {list.filter((x) => x.sub.status === "approved").length} to sign
+              </span>
+            )}
+          </button>
+          <div className={`bg-white border border-slate-200 rounded-xl divide-y divide-slate-100 ${
+            openDept === dept ? "" : "hidden"
+          }`}>
             {list.map(({ form, sub }) => (
               <div key={sub.id} className="flex items-center gap-3 px-4 py-3">
                 {sub.status === "approved" && (
