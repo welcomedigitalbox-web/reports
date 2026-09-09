@@ -41,6 +41,7 @@ export default function DashboardPage() {
     const [{ data: s }, { data: f }] = await Promise.all([
       supabase.from("report_submissions").select("*")
         .eq("report_date", date)
+        .in("status", ["approved", "acknowledged"])
         .order("form_id"),
       supabase.from("report_forms").select("*").order("sort_order"),
     ]);
