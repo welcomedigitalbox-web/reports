@@ -120,7 +120,7 @@ export default function ReportPage() {
     }
   }
 
-  async function run(fn: () => Promise<{ error: unknown }>, ok: string) {
+  async function run(fn: () => PromiseLike<{ error: unknown }>, ok: string) {
     setBusy(true);
     try {
       const { error } = await fn();
