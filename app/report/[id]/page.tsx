@@ -9,6 +9,7 @@ import {
 } from "@/lib/supabase";
 import { useAuth, isManagerTier, isDirector } from "../../auth-context";
 import SectionBlock from "../../section-block";
+import ConsolidatedPanel from "../../consolidated-panel";
 
 const DEPARTMENTS: Department[] = [
   "sale", "merchandising", "warehouse", "finance", "marketing",
@@ -212,6 +213,10 @@ export default function ReportPage() {
           </div>
           <p className="text-sm text-orange-700 mt-0.5">{sub.request_reason}</p>
         </div>
+      )}
+
+      {form.id === "sales_consolidated" && (
+        <ConsolidatedPanel date={sub.report_date} />
       )}
 
       {sections.map((s) => (
