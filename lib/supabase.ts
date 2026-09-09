@@ -3,21 +3,14 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-// Same project as the POS. The reporting tables live in their own schema;
-// profiles, stores and the approval helpers are shared, which is the point
-// of not standing up a second database.
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  global: {
-    headers: {
-      "Accept-Profile": "reporting",
-      "Content-Profile": "reporting",
-    },
-  },
-});
+// Same project and schema as the POS. Reporting tables carry a report_
+// prefix; profiles, stores and the approval helpers are shared outright,
+// which is the point of not standing up a second database.
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// A second client for the POS side of the same database - profiles, stores,
-// and the org structure the approval rules read.
-export const posDb = createClient(supabaseUrl, supabaseAnonKey);
+// The POS side is the same client now; the alias stays so callers read
+// clearly about which half of the database they mean.
+export const posDb = supabase;
 
 export type Department =
   | "sale"
@@ -155,7 +148,7 @@ export type ActionItem = {
 // Load a form with its sections and fields in the order they should appear.
 export async function loadFormStructure(formId: string) {
   const { data: sections } = await supabase
-    .from("form_sections")
+    .from("report_sections")
     .select("*")
     .eq("form_id", formId)
     .order("sort_order");
@@ -164,7 +157,7 @@ export async function loadFormStructure(formId: string) {
   if (!ids.length) return [] as FormSection[];
 
   const { data: fields } = await supabase
-    .from("form_fields")
+    .from("report_fields")
     .select("*")
     .in("section_id", ids)
     .order("sort_order");

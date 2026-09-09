@@ -31,13 +31,13 @@ export default function HomePage() {
 
     // Your department's forms, unless you are a director - they answer for
     // all of them and file none.
-    const q = supabase.from("forms").select("*").eq("active", true).order("sort_order");
+    const q = supabase.from("report_forms").select("*").eq("active", true).order("sort_order");
     const { data: f } = isDirector(profile?.role) || !profile?.department
       ? await q
       : await q.eq("department", profile.department);
 
     const { data: s } = await supabase
-      .from("submissions")
+      .from("report_submissions")
       .select("*")
       .eq("created_by", profile!.email)
       .order("report_date", { ascending: false })
@@ -65,7 +65,7 @@ export default function HomePage() {
       // The store is the one this account works from. A head covering
       // several files against none of them in particular.
       const { data, error: err } = await supabase
-        .from("submissions")
+        .from("report_submissions")
         .insert({
           form_id: form.id,
           store_id: profile?.store_id || null,
