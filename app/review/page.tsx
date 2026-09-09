@@ -71,7 +71,7 @@ export default function ReviewPage() {
   if (authLoading || loading) {
     return <div className="pt-16 text-center text-sm text-slate-400">…</div>;
   }
-  if (!profile || !(isManagerTier(profile.role) || isDirector(profile.role))) return null;
+  if (!profile || !isManagerTier(profile.role) || isDirector(profile.role)) return null;
 
   return (
     <div className="max-w-4xl mx-auto">

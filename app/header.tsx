@@ -14,7 +14,8 @@ export default function Header() {
   // department filed; the owner reads what the heads have signed.
   const tabs = [
     ...(isDirector(profile.role) ? [] : [{ href: "/", label: "My Reports" }]),
-    ...(isManagerTier(profile.role) ? [{ href: "/review", label: "Review" }] : []),
+    ...(isManagerTier(profile.role) && !isDirector(profile.role)
+      ? [{ href: "/review", label: "Review" }] : []),
     ...(isDirector(profile.role) ? [{ href: "/dashboard", label: "Dashboard" }] : []),
     { href: "/inbox", label: "Inbox" },
   ];
