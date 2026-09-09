@@ -36,6 +36,11 @@ export default function HomePage() {
       ? await q
       : await q.eq("department", profile.department);
 
+    const forRole = ((f as ReportForm[]) || []).filter((x) => {
+      const roles = (x as ReportForm & { allowed_roles?: string[] }).allowed_roles;
+      return !roles?.length || roles.includes(profile!.role);
+    });
+
     const { data: s } = await supabase
       .from("report_submissions")
       .select("*")
@@ -43,7 +48,7 @@ export default function HomePage() {
       .order("report_date", { ascending: false })
       .limit(30);
 
-    setForms((f as ReportForm[]) || []);
+    setForms(forRole);
     setMine((s as Submission[]) || []);
     setLoading(false);
   }
