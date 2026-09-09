@@ -22,6 +22,10 @@ export default function HomePage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (isDirector(profile?.role)) {
+      router.replace("/dashboard");
+      return;
+    }
     if (profile) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id]);

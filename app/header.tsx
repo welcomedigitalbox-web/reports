@@ -13,7 +13,7 @@ export default function Header() {
   // Three audiences, three doors. Everyone files; heads review what their
   // department filed; the owner reads what the heads have signed.
   const tabs = [
-    { href: "/", label: "My Reports" },
+    ...(isDirector(profile.role) ? [] : [{ href: "/", label: "My Reports" }]),
     ...(isManagerTier(profile.role) ? [{ href: "/review", label: "Review" }] : []),
     ...(isDirector(profile.role) ? [{ href: "/dashboard", label: "Dashboard" }] : []),
     { href: "/inbox", label: "Inbox" },
