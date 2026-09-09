@@ -3,6 +3,13 @@
 import { Trash2, Plus } from "lucide-react";
 import type { FormField, FormSection } from "@/lib/supabase";
 
+// Figures the form can work out for itself. Typing a percentage that the
+// two numbers beside it already imply is an invitation to a wrong one.
+const DERIVED: Record<string, { of: string; per: string }> = {
+  achievement_pct: { of: "actual_sale", per: "daily_target" },
+  conversion_rate: { of: "invoice_count", per: "customer_entrance" },
+};
+
 type Props = {
   section: FormSection;
   answers: Record<string, unknown>;
@@ -10,6 +17,8 @@ type Props = {
   readOnly: boolean;
   stores: { id: string; name: string }[];
   people: { id: string; email: string }[];
+  // The shop this account works from, so a new row starts where they are.
+  defaultStore?: string | null;
 };
 
 // One control per field type. Everything is stored as a string except
@@ -176,14 +185,30 @@ function Field({
 }
 
 export default function SectionBlock({
-  section, answers, onChange, readOnly, stores, people,
+  section, answers, onChange, readOnly, stores, people, defaultStore,
 }: Props) {
   // A table section keeps its rows as an array under the section id, so
   // adding a supplier does not need a schema change.
   const rows = (answers[section.id] as Record<string, unknown>[]) || [];
 
   function setRow(i: number, key: string, value: unknown) {
-    const next = rows.map((r, idx) => (idx === i ? { ...r, [key]: value } : r));
+    const next = rows.map((r, idx) => {
+      if (idx !== i) return r;
+      const row = { ...r, [key]: value };
+
+      // Recompute anything that reads this field, so the percentage
+      // follows the numbers rather than being typed against them.
+      for (const [target, src] of Object.entries(DERIVED)) {
+        if (src.of !== key && src.per !== key) continue;
+        const top = Number(row[src.of]);
+        const bottom = Number(row[src.per]);
+        row[target] =
+          Number.isFinite(top) && Number.isFinite(bottom) && bottom > 0
+            ? Math.round((top / bottom) * 1000) / 10
+            : "";
+      }
+      return row;
+    });
     onChange(section.id, next);
   }
 
@@ -227,7 +252,7 @@ export default function SectionBlock({
                       field={f}
                       value={row[f.key]}
                       onChange={(v) => setRow(i, f.key, v)}
-                      readOnly={readOnly}
+                      readOnly={readOnly || f.key in DERIVED}
                       stores={stores}
                       people={people}
                     />
@@ -240,7 +265,12 @@ export default function SectionBlock({
           {!readOnly && (
             <button
               type="button"
-              onClick={() => onChange(section.id, [...rows, {}])}
+              onClick={() => {
+                const seed: Record<string, unknown> = {};
+                const storeField = section.fields.find((f) => f.field_type === "store");
+                if (storeField && defaultStore) seed[storeField.key] = defaultStore;
+                onChange(section.id, [...rows, seed]);
+              }}
               className="flex items-center gap-1.5 text-sm text-blue-600 font-medium"
             >
               <Plus size={14} /> Add row

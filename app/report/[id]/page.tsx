@@ -223,6 +223,7 @@ export default function ReportPage() {
           readOnly={readOnly}
           stores={stores}
           people={people}
+          defaultStore={sub.store_id || profile?.store_id}
         />
       ))}
 
