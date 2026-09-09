@@ -4,11 +4,34 @@ import { Trash2, Plus } from "lucide-react";
 import type { FormField, FormSection } from "@/lib/supabase";
 
 // Figures the form can work out for itself. Typing a percentage that the
-// two numbers beside it already imply is an invitation to a wrong one.
+// two numbers beside it already imply is an invitation to a wrong one,
+// and a difference column is a subtraction nobody should be doing by eye.
+//
+// Ratios: target = round(of / per * 100, 1)
 const DERIVED: Record<string, { of: string; per: string }> = {
   achievement_pct: { of: "actual_sale", per: "daily_target" },
   conversion_rate: { of: "invoice_count", per: "customer_entrance" },
+  attendance_pct:  { of: "present", per: "total_employees" },
+  roas:            { of: "sale_amount", per: "ad_spend" },
 };
+
+// Differences: target = a - b. Warehouse counts what arrived against what
+// was sent; stock counts the shelf against the system.
+const DIFFERENCE: Record<string, [string, string]> = {
+  difference:       ["received_qty", "quantity"],
+  cash_difference:  ["physical_closing", "expected_closing"],
+  variance:         ["received", "pos_sale"],
+};
+
+// Sums: target = the fields listed, added up.
+const SUM_OF: Record<string, string[]> = {
+  total_received:   ["cash", "kbz", "aya", "kpay", "wave", "other_bank"],
+  expected_closing: ["opening_balance", "cash_in"],
+};
+
+// The stock exception table subtracts one way and values the result the
+// other, so it gets its own pass rather than a third generic rule.
+const STOCK_DIFF = { key: "difference", ground: "ground_qty", system: "system_qty" };
 
 type Props = {
   section: FormSection;
@@ -20,6 +43,51 @@ type Props = {
   // The shop this account works from, so a new row starts where they are.
   defaultStore?: string | null;
 };
+
+
+// Everything a row can work out from what it now holds. Runs on every
+// edit rather than on the fields that happen to feed a formula, so a
+// value pasted in from anywhere still lands the derived ones.
+function recompute(row: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...row };
+  const num = (k: string) => Number(out[k]);
+
+  for (const [target, src] of Object.entries(DERIVED)) {
+    const top = num(src.of);
+    const bottom = num(src.per);
+    out[target] =
+      Number.isFinite(top) && Number.isFinite(bottom) && bottom > 0
+        ? Math.round((top / bottom) * 1000) / 10
+        : "";
+  }
+
+  for (const [target, [a, b]] of Object.entries(DIFFERENCE)) {
+    const x = num(a);
+    const y = num(b);
+    out[target] = Number.isFinite(x) && Number.isFinite(y) ? x - y : "";
+  }
+
+  for (const [target, parts] of Object.entries(SUM_OF)) {
+    const vals = parts.map(num).filter(Number.isFinite);
+    // An untouched section should stay blank rather than reading zero.
+    out[target] = vals.length ? vals.reduce((a, b) => a + b, 0) : "";
+  }
+
+  // Stock exceptions: the shelf against the books, and what that is worth.
+  const ground = num(STOCK_DIFF.ground);
+  const system = num(STOCK_DIFF.system);
+  if (Number.isFinite(ground) && Number.isFinite(system)) {
+    out[STOCK_DIFF.key] = ground - system;
+  }
+
+  return out;
+}
+
+const COMPUTED = new Set([
+  ...Object.keys(DERIVED),
+  ...Object.keys(DIFFERENCE),
+  ...Object.keys(SUM_OF),
+]);
 
 // One control per field type. Everything is stored as a string except
 // numbers and yes/no, because the answers are jsonb and the form
@@ -192,23 +260,9 @@ export default function SectionBlock({
   const rows = (answers[section.id] as Record<string, unknown>[]) || [];
 
   function setRow(i: number, key: string, value: unknown) {
-    const next = rows.map((r, idx) => {
-      if (idx !== i) return r;
-      const row = { ...r, [key]: value };
-
-      // Recompute anything that reads this field, so the percentage
-      // follows the numbers rather than being typed against them.
-      for (const [target, src] of Object.entries(DERIVED)) {
-        if (src.of !== key && src.per !== key) continue;
-        const top = Number(row[src.of]);
-        const bottom = Number(row[src.per]);
-        row[target] =
-          Number.isFinite(top) && Number.isFinite(bottom) && bottom > 0
-            ? Math.round((top / bottom) * 1000) / 10
-            : "";
-      }
-      return row;
-    });
+    const next = rows.map((r, idx) =>
+      idx === i ? recompute({ ...r, [key]: value }) : r
+    );
     onChange(section.id, next);
   }
 
@@ -252,7 +306,7 @@ export default function SectionBlock({
                       field={f}
                       value={row[f.key]}
                       onChange={(v) => setRow(i, f.key, v)}
-                      readOnly={readOnly || f.key in DERIVED}
+                      readOnly={readOnly || COMPUTED.has(f.key)}
                       stores={stores}
                       people={people}
                     />
@@ -291,8 +345,15 @@ export default function SectionBlock({
               <Field
                 field={f}
                 value={answers[f.key]}
-                onChange={(v) => onChange(f.key, v)}
-                readOnly={readOnly}
+                onChange={(v) => {
+                  // A plain section is one flat set of answers, so the
+                  // recompute runs across the whole submission.
+                  const next = recompute({ ...answers, [f.key]: v });
+                  for (const k of [f.key, ...COMPUTED]) {
+                    if (next[k] !== answers[k]) onChange(k, next[k]);
+                  }
+                }}
+                readOnly={readOnly || COMPUTED.has(f.key)}
                 stores={stores}
                 people={people}
               />
