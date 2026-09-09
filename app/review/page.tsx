@@ -47,31 +47,37 @@ export default function ReviewPage() {
   // A request is a decision too, so it sits with the waiting pile rather
   // than in a queue of its own that nobody opens.
   const visible = useMemo(() => {
-    if (tab === "all") return rows;
+    const seen = isDirector(profile?.role)
+      ? rows.filter((r) => r.status !== "submitted")
+      : rows;
+    if (tab === "all") return seen;
     if (tab === "submitted") {
-      return rows.filter((r) =>
+      return seen.filter((r) =>
         ["submitted", "cancel_requested", "edit_requested"].includes(r.status)
       );
     }
-    return rows.filter((r) => r.status === tab);
-  }, [rows, tab]);
+    return seen.filter((r) => r.status === tab);
+  }, [rows, tab, profile?.role]);
 
   const counts = useMemo(() => {
-    const waiting = rows.filter((r) =>
+    const rows2 = isDirector(profile?.role)
+      ? rows.filter((r) => r.status !== "submitted")
+      : rows;
+    const waiting = rows2.filter((r) =>
       ["submitted", "cancel_requested", "edit_requested"].includes(r.status)
     ).length;
     return {
       submitted: waiting,
-      approved: rows.filter((r) => r.status === "approved").length,
-      rejected: rows.filter((r) => r.status === "rejected").length,
-      all: rows.length,
+      approved: rows2.filter((r) => r.status === "approved").length,
+      rejected: rows2.filter((r) => r.status === "rejected").length,
+      all: rows2.length,
     } as Record<string, number>;
-  }, [rows]);
+  }, [rows, profile?.role]);
 
   if (authLoading || loading) {
     return <div className="pt-16 text-center text-sm text-slate-400">…</div>;
   }
-  if (!profile || !isManagerTier(profile.role) || isDirector(profile.role)) return null;
+  if (!profile || !(isManagerTier(profile.role) || isDirector(profile.role))) return null;
 
   return (
     <div className="max-w-4xl mx-auto">
