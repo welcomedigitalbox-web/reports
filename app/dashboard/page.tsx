@@ -23,6 +23,9 @@ export default function DashboardPage() {
   // Eight departments open at once is a wall. The one that needs the
   // owner - anything still waiting - opens itself; the rest fold away.
   const [openDept, setOpenDept] = useState<string | null>(null);
+  // Which departments have not reported is worth knowing and not worth a
+  // paragraph across the top of the screen every morning.
+  const [showMissing, setShowMissing] = useState(false);
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -116,14 +119,22 @@ export default function DashboardPage() {
       </div>
 
       {missing.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4">
-          <div className="flex items-center gap-2 text-sm font-medium text-amber-800">
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 mb-4">
+          <button
+            onClick={() => setShowMissing(!showMissing)}
+            className="flex items-center gap-2 text-sm font-medium text-amber-800 w-full text-left"
+          >
             <AlertTriangle size={15} />
             Not filed yet ({missing.length})
-          </div>
-          <p className="text-xs text-amber-700 mt-1">
-            {missing.map((f) => f.name).join(" · ")}
-          </p>
+            <span className="ml-auto text-xs font-normal">
+              {showMissing ? "hide" : "show"}
+            </span>
+          </button>
+          {showMissing && (
+            <p className="text-xs text-amber-700 mt-2">
+              {missing.map((f) => f.name).join(" · ")}
+            </p>
+          )}
         </div>
       )}
 
