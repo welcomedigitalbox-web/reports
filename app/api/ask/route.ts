@@ -70,12 +70,12 @@ export async function POST(req: NextRequest) {
     const rin = Number(process.env.AI_RATE_IN || (haiku ? 1 : 3));
     const rout = Number(process.env.AI_RATE_OUT || (haiku ? 5 : 15));
     const cost = (u.inp * rin + u.cw * rin * 1.25 + u.cr * rin * 0.1 + u.out * rout) / 1e6;
-    const { data: me } = await sb.auth.getUser();
+    const { data: me } = await sb.auth.getUser(token);
     await sb.from("ai_usage").insert({
       user_id: me.user?.id, email: me.user?.email, question: lastQ, model,
       input_tokens: u.inp, output_tokens: u.out, cache_read_tokens: u.cr, cache_write_tokens: u.cw,
       cost_usd: cost,
-    });
+    }).then(({ error }) => { if (error) console.error("ai_usage insert:", error.message); });
   }
   for (let i = 0; i < 5; i++) {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
