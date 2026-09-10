@@ -5,6 +5,12 @@ import { AuthProvider } from "./auth-context";
 import Header from "./header";
 
 export const metadata: Metadata = {
+  other: {
+    "apple-mobile-web-app-capable": "yes",
+    "mobile-web-app-capable": "yes",
+    "apple-mobile-web-app-status-bar-style": "default",
+    "apple-mobile-web-app-title": "EBH Reports",
+  },
   appleWebApp: { capable: true, title: "EBH Reports", statusBarStyle: "default" },
   title: "Daily Reports",
   description: "Departmental daily reporting",
