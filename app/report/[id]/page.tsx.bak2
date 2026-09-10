@@ -11,21 +11,6 @@ import { useAuth, isManagerTier, isDirector } from "../../auth-context";
 import SectionBlock from "../../section-block";
 import ConsolidatedPanel from "../../consolidated-panel";
 
-function findLabel(node: unknown, id: string): string | undefined {
-  if (!node || typeof node !== "object") return;
-  if (Array.isArray(node)) {
-    for (const n of node) { const r = findLabel(n, id); if (r) return r; }
-    return;
-  }
-  const o = node as Record<string, unknown>;
-  if (o.id === id || o.key === id) {
-    const l = o.label ?? o.title ?? o.text ?? o.question ?? o.name;
-    if (typeof l === "string" && l) return l;
-  }
-  for (const v of Object.values(o)) { const r = findLabel(v, id); if (r) return r; }
-}
-
-
 type Change = { path: string; from: unknown; to: unknown };
 
 function diffValues(oldV: unknown, newV: unknown, path = ""): Change[] {
@@ -286,46 +271,26 @@ export default function ReportPage() {
             <div className="border-t border-slate-100 divide-y divide-slate-100">
               {history.map((h) => {
                 const key = String(h.field_key || "");
-                const isStatus = key === "_status";
-                const title = isStatus
-                  ? "Status"
-                  : key.startsWith("_")
-                  ? key.slice(1).replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase())
-                  : findLabel(sections, key) || key;
-                const oldV = h.old_value, newV = h.new_value;
-                const structured =
-                  !isStatus &&
-                  ((oldV !== null && typeof oldV === "object") || (newV !== null && typeof newV === "object"));
-                const changes = structured ? diffValues(oldV, newV) : [];
-                const hasValue = oldV != null || newV != null;
+                const label =
+                  key === "_status" ? "Status"
+                  : key === "_edit_requested" ? "Edit requested"
+                  : key === "_cancel_requested" ? "Cancel requested"
+                  : key;
                 return (
-                  <div key={String(h.id)} className="border-b border-slate-100 py-2 text-sm last:border-0">
-                    <div className="flex flex-wrap items-baseline gap-2">
-                      <span className="font-medium text-slate-800">{title}</span>
-                      <span className="text-xs text-slate-400">
-                        {String(h.edited_by || "")} ·{" "}
-                        {h.edited_at ? new Date(String(h.edited_at)).toLocaleString() : ""}
+                  <div key={String(h.id)} className="px-4 py-2 text-xs">
+                    <div className="flex justify-between gap-3">
+                      <span className="font-medium">{label}</span>
+                      <span className="text-slate-400 shrink-0">
+                        {String(h.edited_by)} · {new Date(String(h.edited_at)).toLocaleString()}
                       </span>
                     </div>
-                    {structured ? (
-                      <ul className="mt-1 space-y-0.5">
-                        {changes.map((c, i) => (
-                          <li key={i} className="flex flex-wrap gap-2">
-                            <span className="text-slate-500">{c.path}</span>
-                            <span className="text-red-600 line-through">{fmt(c.from)}</span>
-                            <span className="text-slate-400">→</span>
-                            <span className="text-green-700">{fmt(c.to)}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : hasValue ? (
-                      <div className="mt-1 flex flex-wrap gap-2">
-                        <span className="text-red-600">{fmt(oldV)}</span>
-                        <span className="text-slate-400">→</span>
-                        <span className="text-green-700">{fmt(newV)}</span>
+                    {h.note ? (
+                      <div className="text-slate-600 mt-0.5">{String(h.note)}</div>
+                    ) : (
+                      <div className="text-slate-500 mt-0.5">
+                        {JSON.stringify(h.old_value)} → {JSON.stringify(h.new_value)}
                       </div>
-                    ) : null}
-                    {h.note ? <div className="mt-1 text-slate-600 italic">{String(h.note)}</div> : null}
+                    )}
                   </div>
                 );
               })}
