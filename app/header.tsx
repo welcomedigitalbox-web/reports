@@ -23,6 +23,7 @@ export default function Header() {
     ...(isDirector(profile.role) ? [] : [{ href: "/", label: "My Reports" }]),
     ...(isManagerTier(profile.role) || hasReports ? [{ href: "/review", label: "Review" }] : []),
     ...(isDirector(profile.role) ? [{ href: "/dashboard", label: "Dashboard" }, { href: "/ask", label: "Ask AI" }] : []),
+    ...(profile.email === "admin@edu.com" ? [{ href: "/usage", label: "AI Usage" }] : []),
     { href: "/inbox", label: "Inbox" },
   ];
 

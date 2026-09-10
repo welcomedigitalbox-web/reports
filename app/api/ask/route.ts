@@ -62,6 +62,21 @@ export async function POST(req: NextRequest) {
   const queries: string[] = [];
   const system = SYSTEM.replace("${TODAY}", new Date().toISOString().slice(0, 10));
 
+  const model = process.env.AI_MODEL || "claude-sonnet-5";
+  const u = { inp: 0, out: 0, cr: 0, cw: 0 };
+  const lastQ = String(messages[messages.length - 1]?.content || "").slice(0, 300);
+  async function saveUsage() {
+    const haiku = /haiku/i.test(model);
+    const rin = Number(process.env.AI_RATE_IN || (haiku ? 1 : 3));
+    const rout = Number(process.env.AI_RATE_OUT || (haiku ? 5 : 15));
+    const cost = (u.inp * rin + u.cw * rin * 1.25 + u.cr * rin * 0.1 + u.out * rout) / 1e6;
+    const { data: me } = await sb.auth.getUser();
+    await sb.from("ai_usage").insert({
+      user_id: me.user?.id, email: me.user?.email, question: lastQ, model,
+      input_tokens: u.inp, output_tokens: u.out, cache_read_tokens: u.cr, cache_write_tokens: u.cw,
+      cost_usd: cost,
+    });
+  }
   for (let i = 0; i < 5; i++) {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -70,15 +85,19 @@ export async function POST(req: NextRequest) {
         "x-api-key": process.env.ANTHROPIC_API_KEY!,
         "anthropic-version": "2023-06-01",
       },
-      body: JSON.stringify({ model: process.env.AI_MODEL || "claude-sonnet-5", max_tokens: 3000, system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }], tools: TOOLS, messages: convo }),
+      body: JSON.stringify({ model, max_tokens: 3000, system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }], tools: TOOLS, messages: convo }),
     });
     const data = await r.json();
+    if (data?.usage) {
+      u.inp += data.usage.input_tokens || 0; u.out += data.usage.output_tokens || 0;
+      u.cr += data.usage.cache_read_input_tokens || 0; u.cw += data.usage.cache_creation_input_tokens || 0;
+    }
     if (!r.ok) return NextResponse.json({ error: data?.error?.message || "AI error" }, { status: 500 });
 
     convo.push({ role: "assistant", content: data.content });
     if (data.stop_reason !== "tool_use") {
       const text = data.content.filter((c: { type: string }) => c.type === "text").map((c: { text: string }) => c.text).join("\n").replace(/[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]+/g, "").trim();
-      return NextResponse.json({ answer: text, queries });
+      await saveUsage(); return NextResponse.json({ answer: text, queries });
     }
     const results = [];
     for (const c of data.content) {
@@ -93,5 +112,6 @@ export async function POST(req: NextRequest) {
     }
     convo.push({ role: "user", content: results });
   }
+  await saveUsage();
   return NextResponse.json({ answer: "မေးခွန်းက ရှုပ်လွန်းလို့ ပိုတိတိကျကျ ပြန်မေးပေးပါ။", queries });
 }
