@@ -36,6 +36,7 @@ export default function ReviewPage() {
     // answers for, so the query asks for everything it can see.
     const [{ data: s }, { data: f }] = await Promise.all([
       supabase.from("report_submissions").select("*")
+        .not("status", "in", "(draft,archived)")
         .order("report_date", { ascending: false }).limit(200),
       supabase.from("report_forms").select("*"),
     ]);
