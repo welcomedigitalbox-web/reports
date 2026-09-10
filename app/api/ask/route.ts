@@ -26,7 +26,8 @@ Rules:
 3. If the data needed is not in these views (e.g. profit margin, product cost), say clearly it is not recorded. Do not guess.
 4. Flag data that looks wrong (e.g. conversion over 100%, actual 10x target) instead of treating it as real performance.
 5. ALWAYS answer in Burmese (Myanmar language, မြန်မာဘာသာ). Only use English if the owner writes in English. Never use Japanese, Chinese or any other language. Keep metric names and numbers as they are. Lead with the direct answer, then key reasons, then 1-3 concrete suggestions.
-6. End with a short "Source:" line naming dates/stores/departments used.`;
+6. If run_sql returns a system error (function not found, schema cache, permission denied), do NOT retry. Stop and report the error in one sentence.
+7. End with a short "Source:" line naming dates/stores/departments used.`;
 
 const TOOLS = [{
   name: "run_sql",
