@@ -299,7 +299,7 @@ export default function ReportPage() {
                 const changes = structured ? diffValues(oldV, newV) : [];
                 const hasValue = oldV != null || newV != null;
                 return (
-                  <div key={String(h.id)} className="border-b border-slate-100 py-2 text-sm last:border-0">
+                  <div key={String(h.id)} className="border-b border-slate-100 px-4 py-3 text-sm last:border-0 hover:bg-slate-50">
                     <div className="flex flex-wrap items-baseline gap-2">
                       <span className="font-medium text-slate-800">{title}</span>
                       <span className="text-xs text-slate-400">
@@ -308,7 +308,7 @@ export default function ReportPage() {
                       </span>
                     </div>
                     {structured ? (
-                      <ul className="mt-1 space-y-0.5">
+                      <ul className="mt-1.5 space-y-1 pl-2 border-l-2 border-slate-100">
                         {changes.map((c, i) => (
                           <li key={i} className="flex flex-wrap gap-2">
                             <span className="text-slate-500">{c.path}</span>
