@@ -22,7 +22,7 @@ export default function Header() {
   const tabs = [
     ...(isDirector(profile.role) ? [] : [{ href: "/", label: "My Reports" }]),
     ...(isManagerTier(profile.role) || hasReports ? [{ href: "/review", label: "Review" }] : []),
-    ...(isDirector(profile.role) ? [{ href: "/dashboard", label: "Dashboard" }] : []),
+    ...(isDirector(profile.role) ? [{ href: "/dashboard", label: "Dashboard" }, { href: "/ask", label: "Ask AI" }] : []),
     { href: "/inbox", label: "Inbox" },
   ];
 
