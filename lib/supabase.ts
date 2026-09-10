@@ -17,7 +17,8 @@ export type Department =
   | "merchandising"
   | "warehouse"
   | "finance"
-  | "marketing";
+  | "marketing"
+  | "office";
 
 export type Profile = {
   id: string;

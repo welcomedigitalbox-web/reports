@@ -56,11 +56,16 @@ export default function ReviewPage() {
     });
   }, []);
 
+  const officeForms = useMemo(
+    () => new Set(forms.filter((f) => String(f.department) === "office").map((f) => f.id)),
+    [forms]
+  );
+
   // A request is a decision too, so it sits with the waiting pile rather
   // than in a queue of its own that nobody opens.
   const visible = useMemo(() => {
     const seen = isDirector(profile?.role)
-      ? rows.filter((r) => r.status !== "submitted" || mgrEmails.has(String(r.created_by)))
+      ? rows.filter((r) => r.status !== "submitted" || mgrEmails.has(String(r.created_by)) || officeForms.has(r.form_id))
       : rows;
     if (tab === "all") return seen;
     if (tab === "submitted") {
@@ -69,11 +74,11 @@ export default function ReviewPage() {
       );
     }
     return seen.filter((r) => r.status === tab);
-  }, [rows, tab, profile?.role, mgrEmails]);
+  }, [rows, tab, profile?.role, mgrEmails, officeForms]);
 
   const counts = useMemo(() => {
     const rows2 = isDirector(profile?.role)
-      ? rows.filter((r) => r.status !== "submitted" || mgrEmails.has(String(r.created_by)))
+      ? rows.filter((r) => r.status !== "submitted" || mgrEmails.has(String(r.created_by)) || officeForms.has(r.form_id))
       : rows;
     const waiting = rows2.filter((r) =>
       ["submitted", "cancel_requested", "edit_requested"].includes(r.status)
@@ -84,7 +89,7 @@ export default function ReviewPage() {
       rejected: rows2.filter((r) => r.status === "rejected").length,
       all: rows2.length,
     } as Record<string, number>;
-  }, [rows, profile?.role, mgrEmails]);
+  }, [rows, profile?.role, mgrEmails, officeForms]);
 
   if (authLoading || loading) {
     return <div className="pt-16 text-center text-sm text-slate-400">…</div>;

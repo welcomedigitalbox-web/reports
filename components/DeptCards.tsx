@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
-const DEPTS = ["sale", "merchandising", "marketing", "finance", "warehouse"];
+const DEPTS = ["sale", "merchandising", "marketing", "finance", "warehouse", "office"];
 
 export default function DeptCards({ date }: { date: string }) {
   const router = useRouter();
