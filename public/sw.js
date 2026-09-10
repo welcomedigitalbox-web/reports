@@ -1,6 +1,13 @@
-self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("install", (e) => {
+  self.skipWaiting();
+  e.waitUntil(caches.open("ebh-v1").then((c) => c.add("/offline.html")));
+});
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
-self.addEventListener("fetch", () => {}); // network-only (data အမြဲ အသစ်)
+self.addEventListener("fetch", (e) => {
+  if (e.request.mode === "navigate") {
+    e.respondWith(fetch(e.request).catch(() => caches.match("/offline.html")));
+  }
+});
 
 self.addEventListener("push", (e) => {
   const d = e.data ? e.data.json() : {};

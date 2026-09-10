@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
+    id: "/",
     name: "Edu Baby House Reports",
     short_name: "EBH Reports",
     description: "Daily department reports",
@@ -9,6 +10,7 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: "/",
     display: "standalone",
     orientation: "portrait",
+    categories: ["business", "productivity"],
     background_color: "#ffffff",
     theme_color: "#16a34a",
     icons: [
