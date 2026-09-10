@@ -45,6 +45,13 @@ export default function ReviewPage() {
     setLoading(false);
   }
 
+  const [hasReports, setHasReports] = useState(false);
+  useEffect(() => {
+    if (!profile?.id) return;
+    supabase.from("profiles").select("id", { count: "exact", head: true })
+      .eq("reports_to", profile.id)
+      .then(({ count }) => setHasReports((count || 0) > 0));
+  }, [profile?.id]);
   const [mgrEmails, setMgrEmails] = useState<Set<string>>(new Set());
   useEffect(() => {
     supabase.from("profiles").select("email, role").then(({ data }) => {
@@ -94,7 +101,7 @@ export default function ReviewPage() {
   if (authLoading || loading) {
     return <div className="pt-16 text-center text-sm text-slate-400">…</div>;
   }
-  if (!profile || !(isManagerTier(profile.role) || isDirector(profile.role))) return null;
+  if (!profile || !(isManagerTier(profile.role) || isDirector(profile.role) || hasReports)) return null;
 
   return (
     <div className="max-w-4xl mx-auto">
