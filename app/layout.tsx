@@ -1,10 +1,11 @@
-import SwRegister from "@/components/SwRegister";
+import SwRegister from "../components/SwRegister";
 import type { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "./auth-context";
 import Header from "./header";
 
 export const metadata: Metadata = {
+  appleWebApp: { capable: true, title: "EBH Reports", statusBarStyle: "default" },
   title: "Daily Reports",
   description: "Departmental daily reporting",
 };
