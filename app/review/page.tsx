@@ -45,11 +45,22 @@ export default function ReviewPage() {
     setLoading(false);
   }
 
+  const [mgrEmails, setMgrEmails] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    supabase.from("profiles").select("email, role").then(({ data }) => {
+      setMgrEmails(new Set(
+        ((data as { email: string; role: string }[]) || [])
+          .filter((p) => isManagerTier(p.role))
+          .map((p) => p.email)
+      ));
+    });
+  }, []);
+
   // A request is a decision too, so it sits with the waiting pile rather
   // than in a queue of its own that nobody opens.
   const visible = useMemo(() => {
     const seen = isDirector(profile?.role)
-      ? rows.filter((r) => r.status !== "submitted")
+      ? rows.filter((r) => r.status !== "submitted" || mgrEmails.has(String(r.created_by)))
       : rows;
     if (tab === "all") return seen;
     if (tab === "submitted") {
@@ -58,11 +69,11 @@ export default function ReviewPage() {
       );
     }
     return seen.filter((r) => r.status === tab);
-  }, [rows, tab, profile?.role]);
+  }, [rows, tab, profile?.role, mgrEmails]);
 
   const counts = useMemo(() => {
     const rows2 = isDirector(profile?.role)
-      ? rows.filter((r) => r.status !== "submitted")
+      ? rows.filter((r) => r.status !== "submitted" || mgrEmails.has(String(r.created_by)))
       : rows;
     const waiting = rows2.filter((r) =>
       ["submitted", "cancel_requested", "edit_requested"].includes(r.status)
@@ -73,7 +84,7 @@ export default function ReviewPage() {
       rejected: rows2.filter((r) => r.status === "rejected").length,
       all: rows2.length,
     } as Record<string, number>;
-  }, [rows, profile?.role]);
+  }, [rows, profile?.role, mgrEmails]);
 
   if (authLoading || loading) {
     return <div className="pt-16 text-center text-sm text-slate-400">…</div>;
