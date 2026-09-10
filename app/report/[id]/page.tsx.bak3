@@ -67,7 +67,6 @@ export default function ReportPage() {
   // who asked to change it, and the reason they gave.
   const [history, setHistory] = useState<Record<string, unknown>[]>([]);
   const [showHistory, setShowHistory] = useState(false);
-  const [approverOk, setApproverOk] = useState(false);
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
   const [people, setPeople] = useState<{ id: string; email: string }[]>([]);
@@ -143,22 +142,12 @@ export default function ReportPage() {
     if (!sub || !form || !profile) return false;
     if (sub.status !== "submitted") return false;
     if (sub.created_by === profile.email && !isDirector(profile.role)) return false;
-    return approverOk;
+    return isManagerTier(profile.role);
   }, [sub, form, profile]);
-
-  useEffect(() => {
-    if (!sub?.created_by) return;
-    (async () => {
-      const { data: r } = await supabase.from("profiles").select("id").eq("email", sub.created_by).maybeSingle();
-      if (!r) return setApproverOk(false);
-      const { data } = await supabase.rpc("can_approve_for", { p_requester: (r as { id: string }).id });
-      setApproverOk(!!data);
-    })();
-  }, [sub?.created_by]);
 
   const canDecideRequest =
     !!sub && ["cancel_requested", "edit_requested"].includes(sub.status)
-    && approverOk;
+    && isManagerTier(profile?.role);
 
   function setAnswer(key: string, value: unknown) {
     setAnswers((a) => ({ ...a, [key]: value }));
