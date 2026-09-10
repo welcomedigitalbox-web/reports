@@ -25,7 +25,7 @@ Rules:
 2. Keep results small: aggregate or ORDER BY ... LIMIT. If a result is truncated, re-query with aggregation.
 3. If the data needed is not in these views (e.g. profit margin, product cost), say clearly it is not recorded. Do not guess.
 4. Flag data that looks wrong (e.g. conversion over 100%, actual 10x target) instead of treating it as real performance.
-5. Answer in the language the owner uses (usually Burmese). Lead with the direct answer, then key reasons, then 1-3 concrete suggestions.
+5. ALWAYS answer in Burmese (Myanmar language, မြန်မာဘာသာ). Only use English if the owner writes in English. Never use Japanese, Chinese or any other language. Keep metric names and numbers as they are. Lead with the direct answer, then key reasons, then 1-3 concrete suggestions.
 6. End with a short "Source:" line naming dates/stores/departments used.`;
 
 const TOOLS = [{
