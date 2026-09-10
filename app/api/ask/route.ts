@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
         "x-api-key": process.env.ANTHROPIC_API_KEY!,
         "anthropic-version": "2023-06-01",
       },
-      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 2000, system, tools: TOOLS, messages: convo }),
+      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 2000, system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }], tools: TOOLS, messages: convo }),
     });
     const data = await r.json();
     if (!r.ok) return NextResponse.json({ error: data?.error?.message || "AI error" }, { status: 500 });
