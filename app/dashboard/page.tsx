@@ -8,6 +8,7 @@ import {
   type ReportForm, type Submission, type Department,
 } from "@/lib/supabase";
 import { useAuth, isDirector } from "../auth-context";
+import DeptCards from "@/components/DeptCards";
 
 const DEPT_ORDER: Department[] = [
   "sale", "merchandising", "warehouse", "finance", "marketing",
@@ -107,6 +108,7 @@ export default function DashboardPage() {
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
           <h1 className="text-xl font-semibold">Dashboard</h1>
+      <DeptCards date={date} />
           <p className="text-sm text-slate-500 mt-0.5">
             {rows.length} filed · {acknowledgeable.length} waiting on you
           </p>
