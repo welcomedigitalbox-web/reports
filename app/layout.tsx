@@ -1,3 +1,4 @@
+import SwRegister from "@/components/SwRegister";
 import type { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "./auth-context";
@@ -18,6 +19,7 @@ export default function RootLayout({
           <Header />
           <main className="px-4 sm:px-6 pb-16">{children}</main>
         </AuthProvider>
+      <SwRegister />
       </body>
     </html>
   );
