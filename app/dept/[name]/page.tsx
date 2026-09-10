@@ -63,6 +63,10 @@ export default function DeptPage() {
   }
 
   const isCons = (fid: string) => /consolidat/i.test(forms.find((f) => f.id === fid)?.name || "");
+  const isHead = (fid: string) => {
+    const f = forms.find((x) => x.id === fid);
+    return isCons(fid) || /manager/i.test(String(f?.filled_by || ""));
+  };
   const staffSubs = subs.filter((s) => !isCons(s.form_id));
   const consSubs = subs.filter((s) => isCons(s.form_id));
   const who = (s: Submission) => (s.store_id && stores[s.store_id]) || s.created_by.split("@")[0];
@@ -153,10 +157,10 @@ export default function DeptPage() {
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
-        {[...consSubs, ...staffSubs].map((s) => (
+        {[...subs.filter((x) => isHead(x.form_id)), ...subs.filter((x) => !isHead(x.form_id))].map((s) => (
           <button key={s.id} onClick={() => router.push(`/report/${s.id}`)}
-            className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-slate-50">
-            <div className={isCons(s.form_id) ? "" : "pl-4 border-l-2 border-slate-100"}>
+            className={`w-full flex items-center justify-between px-4 py-3 text-left hover:bg-slate-50 ${isHead(s.form_id) ? "bg-slate-50" : ""}`}>
+            <div className={isHead(s.form_id) ? "" : "pl-4 border-l-2 border-slate-100"}>
               <div className="text-sm font-medium">{who(s)}</div>
               <div className="text-xs text-slate-400">{forms.find((f) => f.id === s.form_id)?.name}</div>
             </div>
