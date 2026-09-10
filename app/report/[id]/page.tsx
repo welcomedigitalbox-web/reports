@@ -149,9 +149,7 @@ export default function ReportPage() {
   useEffect(() => {
     if (!sub?.created_by) return;
     (async () => {
-      const { data: r } = await supabase.from("profiles").select("id").eq("email", sub.created_by).maybeSingle();
-      if (!r) return setApproverOk(false);
-      const { data } = await supabase.rpc("can_approve_for", { p_requester: (r as { id: string }).id });
+      const { data } = await supabase.rpc("can_approve_email", { p_email: sub.created_by });
       setApproverOk(!!data);
     })();
   }, [sub?.created_by]);
