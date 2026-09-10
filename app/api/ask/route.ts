@@ -37,7 +37,8 @@ Rules:
 5. ALWAYS answer in Burmese (Myanmar language, မြန်မာဘာသာ). Only use English if the owner writes in English. Never use Japanese, Chinese or any other language. Keep metric names and numbers as they are. Lead with the direct answer, then key reasons, then 1-3 concrete suggestions.
 6. If run_sql returns a system error (function not found, schema cache, permission denied), do NOT retry. Stop and report the error in one sentence.
 7. Be fast: use as few queries as possible (ideally 1-2). Keep the answer concise.
-8. End with a short "Source:" line naming dates/stores/departments used.`;
+8. Refer to people by the part before @ (merch-exec1, not merch-exec1@edu.com).
+9. End with a short "ရင်းမြစ်:" line in Burmese listing only dates, departments and stores (never view, table or column names) naming dates/stores/departments used.`;
 
 const TOOLS = [{
   name: "run_sql",
@@ -76,7 +77,7 @@ export async function POST(req: NextRequest) {
 
     convo.push({ role: "assistant", content: data.content });
     if (data.stop_reason !== "tool_use") {
-      const text = data.content.filter((c: { type: string }) => c.type === "text").map((c: { text: string }) => c.text).join("\n");
+      const text = data.content.filter((c: { type: string }) => c.type === "text").map((c: { text: string }) => c.text).join("\n").replace(/[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]+/g, "").trim();
       return NextResponse.json({ answer: text, queries });
     }
     const results = [];
