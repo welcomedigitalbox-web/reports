@@ -23,6 +23,10 @@ export default function ReportPage() {
   const [sub, setSub] = useState<Submission | null>(null);
   const [form, setForm] = useState<ReportForm | null>(null);
   const [sections, setSections] = useState<FormSection[]>([]);
+  // What happened to this report after it was filed: who corrected what,
+  // who asked to change it, and the reason they gave.
+  const [history, setHistory] = useState<Record<string, unknown>[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
   const [people, setPeople] = useState<{ id: string; email: string }[]>([]);
@@ -66,10 +70,14 @@ export default function ReportPage() {
     const { data: f } = await supabase
       .from("report_forms").select("*").eq("id", (s as Submission).form_id).single();
 
-    const [structure, { data: st }, { data: pp }] = await Promise.all([
+    const [structure, { data: st }, { data: pp }, { data: hist }] = await Promise.all([
+
       loadFormStructure((s as Submission).form_id),
       supabase.from("stores").select("id, name").order("name"),
       supabase.from("profiles").select("id, email").order("email"),
+      supabase.from("report_edits").select("*")
+        .eq("submission_id", id)
+        .order("edited_at", { ascending: false }),
     ]);
 
     setSub(s as Submission);
@@ -78,6 +86,7 @@ export default function ReportPage() {
     setAnswers(((s as Submission).answers as Record<string, unknown>) || {});
     setStores((st as { id: string; name: string }[]) || []);
     setPeople((pp as { id: string; email: string }[]) || []);
+    setHistory((hist as Record<string, unknown>[]) || []);
     setDirty(false);
     setLoading(false);
   }
@@ -217,6 +226,51 @@ export default function ReportPage() {
 
       {form.id === "sales_consolidated" && (
         <ConsolidatedPanel date={sub.report_date} />
+      )}
+
+      {history.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-xl mb-4">
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-left"
+          >
+            History
+            <span className="text-xs text-slate-400">({history.length})</span>
+            <span className="ml-auto text-xs text-slate-400 font-normal">
+              {showHistory ? "hide" : "show"}
+            </span>
+          </button>
+
+          {showHistory && (
+            <div className="border-t border-slate-100 divide-y divide-slate-100">
+              {history.map((h) => {
+                const key = String(h.field_key || "");
+                const label =
+                  key === "_status" ? "Status"
+                  : key === "_edit_requested" ? "Edit requested"
+                  : key === "_cancel_requested" ? "Cancel requested"
+                  : key;
+                return (
+                  <div key={String(h.id)} className="px-4 py-2 text-xs">
+                    <div className="flex justify-between gap-3">
+                      <span className="font-medium">{label}</span>
+                      <span className="text-slate-400 shrink-0">
+                        {String(h.edited_by)} · {new Date(String(h.edited_at)).toLocaleString()}
+                      </span>
+                    </div>
+                    {h.note ? (
+                      <div className="text-slate-600 mt-0.5">{String(h.note)}</div>
+                    ) : (
+                      <div className="text-slate-500 mt-0.5">
+                        {JSON.stringify(h.old_value)} → {JSON.stringify(h.new_value)}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
 
       {sections.map((s) => (
