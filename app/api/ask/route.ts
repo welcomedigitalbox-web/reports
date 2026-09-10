@@ -13,7 +13,8 @@ Views (PostgreSQL, read-only):
 - ai_metrics(submission_id, report_date, department, form_name, store, created_by, status, section, row_no, metric, label, value numeric)
    common metrics: daily_target, actual_sale, invoice_count, customer_entrance, credit_sale, return_count, lost_sale,
    po_new, po_pending, po_confirmed, po_cancelled, purchase_value, ads_spend, ads_messages, page_reach, new_followers ...
-   Discover others with: select distinct department, metric, label from ai_metrics
+   office: total_employees, present, attendance_pct. marketing weekly: target, this_week, last_week, page_reach, page_engagement, new_followers, posts_count, reels_count, stories_count.
+   Only query for other metrics if truly needed: select distinct department, metric, label from ai_metrics
 - ai_texts(submission_id, report_date, department, form_name, store, created_by, field, label, row_no, text)
    free text: issues, action plans, stock-out items, supplier follow-up, recommendations, special events. Search with ILIKE.
 - ai_people(email, role, department, store, reports_to)
@@ -27,7 +28,8 @@ Rules:
 4. Flag data that looks wrong (e.g. conversion over 100%, actual 10x target) instead of treating it as real performance.
 5. ALWAYS answer in Burmese (Myanmar language, မြန်မာဘာသာ). Only use English if the owner writes in English. Never use Japanese, Chinese or any other language. Keep metric names and numbers as they are. Lead with the direct answer, then key reasons, then 1-3 concrete suggestions.
 6. If run_sql returns a system error (function not found, schema cache, permission denied), do NOT retry. Stop and report the error in one sentence.
-7. End with a short "Source:" line naming dates/stores/departments used.`;
+7. Be fast: use as few queries as possible (ideally 1-2). Keep the answer under 250 words, use short bullet points.
+8. End with a short "Source:" line naming dates/stores/departments used.`;
 
 const TOOLS = [{
   name: "run_sql",
@@ -51,7 +53,7 @@ export async function POST(req: NextRequest) {
   const queries: string[] = [];
   const system = SYSTEM.replace("${TODAY}", new Date().toISOString().slice(0, 10));
 
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 5; i++) {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -59,7 +61,7 @@ export async function POST(req: NextRequest) {
         "x-api-key": process.env.ANTHROPIC_API_KEY!,
         "anthropic-version": "2023-06-01",
       },
-      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 2000, system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }], tools: TOOLS, messages: convo }),
+      body: JSON.stringify({ model: process.env.AI_MODEL || "claude-sonnet-5", max_tokens: 1200, system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }], tools: TOOLS, messages: convo }),
     });
     const data = await r.json();
     if (!r.ok) return NextResponse.json({ error: data?.error?.message || "AI error" }, { status: 500 });
