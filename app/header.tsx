@@ -3,10 +3,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth, isManagerTier, isDirector } from "./auth-context";
+import { useEffect as useEffectHR, useState as useStateHR } from "react";
+import { supabase as sbHR } from "@/lib/supabase";
 
 export default function Header() {
   const pathname = usePathname();
   const { profile, signOut } = useAuth();
+  const [hasReports, setHasReports] = useStateHR(false);
+  useEffectHR(() => {
+    if (!profile?.id) return;
+    sbHR.rpc("my_direct_report_count").then(({ data }) => setHasReports(Number(data || 0) > 0));
+  }, [profile?.id]);
 
   if (!profile || pathname === "/login") return null;
 
@@ -14,7 +21,7 @@ export default function Header() {
   // department filed; the owner reads what the heads have signed.
   const tabs = [
     ...(isDirector(profile.role) ? [] : [{ href: "/", label: "My Reports" }]),
-    ...(isManagerTier(profile.role) ? [{ href: "/review", label: "Review" }] : []),
+    ...(isManagerTier(profile.role) || hasReports ? [{ href: "/review", label: "Review" }] : []),
     ...(isDirector(profile.role) ? [{ href: "/dashboard", label: "Dashboard" }] : []),
     { href: "/inbox", label: "Inbox" },
   ];

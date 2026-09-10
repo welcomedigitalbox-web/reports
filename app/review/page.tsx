@@ -48,9 +48,8 @@ export default function ReviewPage() {
   const [hasReports, setHasReports] = useState(false);
   useEffect(() => {
     if (!profile?.id) return;
-    supabase.from("profiles").select("id", { count: "exact", head: true })
-      .eq("reports_to", profile.id)
-      .then(({ count }) => setHasReports((count || 0) > 0));
+    supabase.rpc("my_direct_report_count")
+      .then(({ data }) => setHasReports(Number(data || 0) > 0));
   }, [profile?.id]);
   const [mgrEmails, setMgrEmails] = useState<Set<string>>(new Set());
   useEffect(() => {
