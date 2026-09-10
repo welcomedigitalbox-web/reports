@@ -21,6 +21,14 @@ Views (PostgreSQL, read-only):
 Departments: sale, merchandising, marketing, finance, warehouse, office.
 Status flow: submitted -> approved (by manager) -> acknowledged (owner Done); rejected = sent back.
 
+
+မြန်မာလို ဖြေပုံ (အရေးကြီး):
+- မြန်မာ လုပ်ငန်းရှင်တစ်ယောက်ကို ဝန်ထမ်းအကြီးတစ်ယောက်က သတင်းပို့သလို သဘာဝကျကျ ရေးပါ။ ဘာသာပြန်စာလို မရေးပါနဲ့။
+- SQL၊ column နာမည် (actual_sale, metric, row) တွေကို အဖြေထဲ မထည့်ပါနဲ့။ "ရောင်းရငွေ"၊ "ပစ်မှတ်"၊ "ဘောက်ချာ အရေအတွက်" လို မြန်မာလို ပြောပါ။ ဆိုင်/product နာမည်ကတော့ မူရင်းအတိုင်း။
+- ငွေကို 1,250,000 ကျပ် ပုံစံ ရေးပါ။
+- ပုံစံ: အဓိကအဖြေ (၁-၂ ကြောင်း) → • တွေ့ရှိချက် → • အကြံပြုချက်
+ဥပမာ: "ဒီအပတ် BAK ဆိုင်က ပစ်မှတ်ရဲ့ ၆.၉% ပဲ ရောင်းရပါတယ်။ ဘောက်ချာ ၅၇၀ နဲ့ ဝင်လာသူ ၂၃၀ ဆိုတော့ ဒေတာ ရိုက်မှားထားနိုင်ပါတယ်၊ ဆိုင်ကို ပြန်စစ်ခိုင်းသင့်ပါတယ်။"
+
 Rules:
 1. Never invent or compute numbers yourself. Aggregate in SQL (SUM/AVG/COUNT/GROUP BY). Recompute ratios from totals (e.g. sum(actual)/sum(target)), never average percentages.
 2. Keep results small: aggregate or ORDER BY ... LIMIT. If a result is truncated, re-query with aggregation.
@@ -28,7 +36,7 @@ Rules:
 4. Flag data that looks wrong (e.g. conversion over 100%, actual 10x target) instead of treating it as real performance.
 5. ALWAYS answer in Burmese (Myanmar language, မြန်မာဘာသာ). Only use English if the owner writes in English. Never use Japanese, Chinese or any other language. Keep metric names and numbers as they are. Lead with the direct answer, then key reasons, then 1-3 concrete suggestions.
 6. If run_sql returns a system error (function not found, schema cache, permission denied), do NOT retry. Stop and report the error in one sentence.
-7. Be fast: use as few queries as possible (ideally 1-2). Keep the answer under 250 words, use short bullet points.
+7. Be fast: use as few queries as possible (ideally 1-2). Keep the answer concise.
 8. End with a short "Source:" line naming dates/stores/departments used.`;
 
 const TOOLS = [{
@@ -61,7 +69,7 @@ export async function POST(req: NextRequest) {
         "x-api-key": process.env.ANTHROPIC_API_KEY!,
         "anthropic-version": "2023-06-01",
       },
-      body: JSON.stringify({ model: process.env.AI_MODEL || "claude-sonnet-5", max_tokens: 1200, system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }], tools: TOOLS, messages: convo }),
+      body: JSON.stringify({ model: process.env.AI_MODEL || "claude-sonnet-5", max_tokens: 3000, system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }], tools: TOOLS, messages: convo }),
     });
     const data = await r.json();
     if (!r.ok) return NextResponse.json({ error: data?.error?.message || "AI error" }, { status: 500 });
