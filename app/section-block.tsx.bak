@@ -15,11 +15,6 @@ const DERIVED: Record<string, { of: string; per: string }> = {
   roas:            { of: "sale_amount", per: "ad_spend" },
 };
 
-// Quotients: target = round(of / per) — a money figure, not a percentage.
-const QUOTIENT: Record<string, { of: string; per: string }> = {
-  avg_invoice: { of: "actual_sale", per: "invoice_count" },
-};
-
 // Differences: target = a - b. Warehouse counts what arrived against what
 // was sent; stock counts the shelf against the system.
 const DIFFERENCE: Record<string, [string, string]> = {
@@ -66,15 +61,6 @@ function recompute(row: Record<string, unknown>): Record<string, unknown> {
         : "";
   }
 
-  for (const [target, src] of Object.entries(QUOTIENT)) {
-    const top = num(src.of);
-    const bottom = num(src.per);
-    out[target] =
-      Number.isFinite(top) && Number.isFinite(bottom) && bottom > 0
-        ? Math.round(top / bottom)
-        : "";
-  }
-
   for (const [target, [a, b]] of Object.entries(DIFFERENCE)) {
     const x = num(a);
     const y = num(b);
@@ -99,7 +85,6 @@ function recompute(row: Record<string, unknown>): Record<string, unknown> {
 
 const COMPUTED = new Set([
   ...Object.keys(DERIVED),
-  ...Object.keys(QUOTIENT),
   ...Object.keys(DIFFERENCE),
   ...Object.keys(SUM_OF),
 ]);
