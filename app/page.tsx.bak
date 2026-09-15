@@ -19,10 +19,6 @@ export default function HomePage() {
   const [mine, setMine] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
-  const [pickDate, setPickDate] = useState(today());
-  const BACK_DAYS = 7;
-  const minDate = new Date(Date.now() - BACK_DAYS * 864e5).toISOString().slice(0, 10);
-  const isLate = pickDate !== today();
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -64,9 +60,9 @@ export default function HomePage() {
   // Today's report for a form, if it has been started.
   const todays = useMemo(() => {
     const map = new Map<string, Submission>();
-    for (const s of mine) if (s.report_date === pickDate) map.set(s.form_id, s);
+    for (const s of mine) if (s.report_date === today()) map.set(s.form_id, s);
     return map;
-  }, [mine, pickDate]);
+  }, [mine]);
 
   async function openForm(form: ReportForm) {
     const existing = todays.get(form.id);
@@ -82,7 +78,7 @@ export default function HomePage() {
         .insert({
           form_id: form.id,
           store_id: profile?.store_id || null,
-          report_date: pickDate,
+          report_date: today(),
           created_by: profile!.email,
           answers: {},
         })
@@ -95,7 +91,7 @@ export default function HomePage() {
       const msg = (e as { message?: string })?.message || String(e);
       // The unique index does the work of "one per day" - if someone else
       // in the department already opened it, say so rather than failing.
-      setError(msg.includes("duplicate") ? `${pickDate} အတွက် report တင်ပြီးသား (သို့) တခြားသူ စဖွင့်ထားပါတယ်။` : msg);
+      setError(msg.includes("duplicate") ? "Someone has already started today's report" : msg);
       setBusy(null);
     }
   }
@@ -109,17 +105,7 @@ export default function HomePage() {
   return (
     <div className="max-w-4xl mx-auto">
       <h1 className="text-xl font-semibold mb-1">Today</h1>
-      <div className="mb-6 flex flex-wrap items-center gap-2">
-        <input type="date" value={pickDate} min={minDate} max={today()}
-          onChange={(e) => setPickDate(e.target.value || today())}
-          className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm bg-white" />
-        {isLate ? (
-          <>
-            <span className="text-xs px-2 py-1 rounded bg-amber-50 text-amber-700">နောက်ကျတင်</span>
-            <button onClick={() => setPickDate(today())} className="text-xs text-blue-600">ဒီနေ့သို့</button>
-          </>
-        ) : <span className="text-xs text-slate-400">ဒီနေ့</span>}
-      </div>
+      <p className="text-sm text-slate-500 mb-6">{today()}</p>
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700 mb-4">
