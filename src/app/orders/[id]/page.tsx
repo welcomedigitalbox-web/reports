@@ -73,6 +73,7 @@ export default async function OrderPage({
             payment_slips: (order.payment_slips as string[]) ?? [],
             sales_person_id: (order.sales_person_id as string) ?? '',
             order_channel_id: (order.order_channel_id as string) ?? '',
+            sale_type: (order.sale_type as string) ?? 'retail',
             discount_type: (order.discount_type as string) ?? 'amount',
             discount_value: Number(order.discount_value ?? order.discount ?? 0),
             advance_payment: Number(order.advance_payment),
@@ -315,6 +316,8 @@ export default async function OrderPage({
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <Row k={t('or2_order_id')} v={ref} />
             <Row k={t('or2_src_channel')} v={(order.order_channel_name as string) ?? '—'} />
+            <Row k={t('or2_sale_type')}
+              v={order.sale_type === 'wholesale' ? t('or2_wholesale') : t('or2_retail')} />
             <Row k={t('or2_seller')} v={(order.sales_person_name as string) ?? '—'} />
             <Row k={t('or2_created_by')} v={(order.created_by_name as string) ?? '—'} />
             <Row k={t('or2_order_date')} v={dateStr} />

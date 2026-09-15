@@ -29,6 +29,7 @@ export async function GET(req: NextRequest) {
     seller: p.get('seller') ?? undefined,
     src: p.get('src') ?? undefined,
     paid: p.get('paid') ?? undefined,
+    sale_type: p.get('sale_type') ?? undefined,
     limit: 5000,
   });
 
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest) {
     'order_no', 'order_date', 'status', 'payment_status', 'delivery_status',
     'customer_name', 'phone', 'city_typed', 'address_typed',
     'region_en', 'region_mm', 'city_clean', 'township_clean', 'address_matched',
-    'shop', 'sales_person', 'order_channel', 'payment_method', 'payment_channel', 'payment_ref',
+    'shop', 'sales_person', 'order_channel', 'sale_type', 'payment_method', 'payment_channel', 'payment_ref',
     'delivery_method', 'items', 'subtotal', 'discount', 'delivery_fee',
     'grand_total', 'advance_paid', 'amount_received', 'balance_due', 'payment_state', 'discount_type', 'discount_value',
     'source', 'ad_id',
@@ -61,6 +62,7 @@ export async function GET(req: NextRequest) {
       (o.msgr_shops as { name?: string } | null)?.name ?? '',
       o.sales_person_name ?? '',
       o.order_channel_name ?? '',
+      o.sale_type ?? 'retail',
       o.payment_method,
       (o.msgr_payment_channels as { name?: string } | null)?.name ?? '',
       o.payment_ref ?? '',

@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
   const b = await req.json() as {
     order_id?: string; amount?: number; channel_id?: string; ref?: string;
     slips?: string[]; paid_at?: string; note?: string; delete_id?: string;
+    items?: { order_id: string; amount: number }[];
   };
   const db = admin();
 
@@ -52,6 +53,38 @@ export async function POST(req: NextRequest) {
     await db.from('msgr_order_payments').delete().eq('id', b.delete_id);
     const received = await resync(row.order_id as string);
     return NextResponse.json({ ok: true, received });
+  }
+
+  let channelNameBulk: string | null = null;
+  if (b.items?.length) {
+    // A courier settles a week of COD in one statement, so the same reference
+    // and date go onto every order on that sheet in one go.
+    if (b.channel_id) {
+      const { data: c } = await db.from('msgr_payment_channels')
+        .select('name').eq('id', b.channel_id).maybeSingle();
+      channelNameBulk = (c?.name as string) ?? null;
+    }
+    const rows = b.items
+      .filter((i) => i.order_id && Number(i.amount) > 0)
+      .map((i) => ({
+        order_id: i.order_id,
+        amount: Number(i.amount),
+        channel_id: b.channel_id || null,
+        channel_name: channelNameBulk,
+        ref: b.ref?.trim() || null,
+        slips: b.slips ?? [],
+        paid_at: b.paid_at || undefined,
+        note: b.note?.trim() || null,
+        actor_id: session.uid,
+        actor_name: session.name || session.email,
+      }));
+    if (!rows.length) {
+      return NextResponse.json({ error: 'nothing to settle' }, { status: 400 });
+    }
+    const { error } = await db.from('msgr_order_payments').insert(rows);
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    for (const id of [...new Set(rows.map((r) => r.order_id))]) await resync(id);
+    return NextResponse.json({ ok: true, settled: rows.length });
   }
 
   const amount = Number(b.amount ?? 0);

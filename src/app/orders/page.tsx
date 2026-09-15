@@ -24,7 +24,7 @@ export default async function Orders({
 }: {
   searchParams: Promise<{
     status?: string; q?: string; shop?: string; by?: string; pay?: string; channel?: string;
-    seller?: string; src?: string; paid?: string;
+    seller?: string; src?: string; paid?: string; sale_type?: string;
     preset?: string; since?: string; until?: string;
   }>;
 }) {
@@ -40,7 +40,7 @@ export default async function Orders({
       since: sp.q ? undefined : r.since,
       until: sp.q ? undefined : r.until,
       shop_id: sp.shop, created_by: sp.by,
-      payment_method: sp.pay, payment_channel_id: sp.channel, seller: sp.seller, src: sp.src, paid: sp.paid,
+      payment_method: sp.pay, payment_channel_id: sp.channel, seller: sp.seller, src: sp.src, paid: sp.paid, sale_type: sp.sale_type,
     }),
     shops(),
     paymentChannels({ all: true }),
@@ -55,15 +55,6 @@ export default async function Orders({
   // Cancelled orders are shown but never counted — a cancelled sale is not a sale.
   const live = rows.filter((o) => o.status !== 'cancelled');
   const total = live.reduce((a, o) => a + Number(o.grand_total ?? 0), 0);
-
-  /** Keeps every other filter when a status chip is clicked. */
-  const withStatus = (s: string | null) => {
-    const q = new URLSearchParams();
-    for (const [k, v] of Object.entries(sp)) if (v && k !== 'status') q.set(k, String(v));
-    if (s) q.set('status', s);
-    const qs = q.toString();
-    return qs ? `/orders?${qs}` : '/orders';
-  };
 
   return (
     <div className="space-y-4">
@@ -80,6 +71,7 @@ export default async function Orders({
                ).toString()}&since=${r.since}&until=${r.until}`}>
               {t('or2_export')}
             </a>
+            <Link className="btn text-sm" href="/orders/settle">{t('st_link')}</Link>
             <Link className="btn-primary" href="/orders/new">{t('or2_new')}</Link>
           </div>
           <RangePicker
@@ -95,20 +87,8 @@ export default async function Orders({
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Link href={withStatus(null)}
-          className={`btn text-xs ${!sp.status ? 'border-brand text-brand' : ''}`}>
-          {t('or2_all_status')}
-        </Link>
-        {statuses.map((s) => (
-          <Link key={s} href={withStatus(s)}
-            className={`btn text-xs ${sp.status === s ? 'border-brand text-brand' : ''}`}>
-            {t(`os_${s}`)}
-          </Link>
-        ))}
-      </div>
-
       <OrderFilters
+        statuses={statuses.map((x) => ({ value: x, label: t(`os_${x}`) }))}
         shops={shopList.map((s) => ({ value: s.id as string, label: s.name as string }))}
         staff={(staffRes.data ?? []).map((u) => ({
           value: u.id as string, label: (u.name as string) || (u.email as string),
@@ -117,12 +97,17 @@ export default async function Orders({
         channels={channelList.map((c) => ({ value: c.id as string, label: c.name as string }))}
         sellers={sellerList.map((p) => ({ value: p.id as string, label: p.name as string }))}
         srcChannels={srcList.map((c) => ({ value: c.id as string, label: c.name as string }))}
+        saleTypes={[
+          { value: 'retail', label: t('or2_retail') },
+          { value: 'wholesale', label: t('or2_wholesale') },
+        ]}
         payStates={[
           { value: 'unpaid', label: t('pay_unpaid') },
           { value: 'partial', label: t('pay_partial') },
           { value: 'paid', label: t('pay_paid') },
         ]}
         labels={{
+          status: t('or2_status'), anyStatus: t('or2_all_status'),
           shop: t('or2_shop'), anyShop: t('or2_any_shop'),
           staff: t('or2_by'), anyStaff: t('or2_any_staff'),
           payment: t('or2_payment'), anyPayment: t('or2_any_payment'),
@@ -130,6 +115,7 @@ export default async function Orders({
           seller: t('or2_seller'), anySeller: t('or2_any_seller'),
           srcChannel: t('or2_src_channel'), anySrc: t('or2_any_src'),
           payState: t('or2_pay_state'), anyPayState: t('or2_any_pay_state'),
+          saleType: t('or2_sale_type'), anySaleType: t('or2_any_sale_type'),
           search: t('or2_search_ph'), clear: t('or2_clear'),
         }}
       />
@@ -185,7 +171,8 @@ export default async function Orders({
                   </span>
                 </div>
                 <div className="text-[11px] text-muted">
-                  {[(o.sales_person_name as string), (o.order_channel_name as string)]
+                  {[(o.sales_person_name as string), (o.order_channel_name as string),
+                    o.sale_type === 'wholesale' ? t('or2_wholesale') : null]
                     .filter(Boolean).join(' · ') || '—'}
                 </div>
               </Link>
@@ -263,6 +250,9 @@ export default async function Orders({
                   </td>
                   <td className="p-3 text-xs text-muted">
                     {(o.order_channel_name as string) || '—'}
+                    {o.sale_type === 'wholesale' && (
+                      <div className="mt-0.5 text-[11px] text-brand">{t('or2_wholesale')}</div>
+                    )}
                   </td>
                   <td className="p-3 text-xs text-muted">
                     {o.source_ad_id ? `ad · ${String(o.source_ad_id).slice(-6)}` : (o.source_type as string) ?? 'organic'}
