@@ -33,21 +33,13 @@ export default function Header() {
     <header className="bg-white border-b border-slate-200 mb-6">
       <div className="px-4 sm:px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          
-            href={APP_URL.pos}
-            className="text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
-          >
-            &larr; Return to Home
-          </a>
-          <div className="flex items-center gap-3">
-          
+          <a
             href={APP_URL.pos}
             className="text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
           >
             &larr; Return to Home
           </a>
           <div className="font-semibold">Daily Reports</div>
-        </div>
         </div>
         <div className="flex items-center gap-3 text-sm">
           <span className="text-slate-500 hidden sm:inline">
