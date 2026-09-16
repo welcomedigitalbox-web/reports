@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { useRouter, usePathname } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { posDb, type Profile } from "@/lib/supabase";
+import { APP_URL, canAccess } from "@/lib/apps";
 
 type AuthContextType = {
   session: Session | null;
@@ -56,13 +57,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (loading) return;
-    if (!session && pathname !== "/login") router.replace("/login");
-  }, [session, loading, pathname, router]);
+
+    // The session is shared across the subdomains and the POS owns the sign-in
+    // screen, so send people there with a note of where they were headed.
+    if (!session) {
+      const back = encodeURIComponent(window.location.href);
+      window.location.replace(`${APP_URL.pos}/login?next=${back}`);
+      return;
+    }
+
+    // Signed in is not the same as allowed: a valid session says who someone
+    // is, not that this app is any of their business.
+    if (profile && !canAccess("report", profile)) {
+      window.location.replace(`${APP_URL.pos}/no-access?app=report`);
+    }
+  }, [session, profile, loading, pathname, router]);
 
   async function signOut() {
+    // This clears the shared cookie, so it signs the person out of every app
+    // at once — which is what one sign-in ought to mean.
     await posDb.auth.signOut();
     setProfile(null);
-    router.replace("/login");
+    window.location.replace(`${APP_URL.pos}/login`);
   }
 
   return (
