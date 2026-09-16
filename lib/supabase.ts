@@ -1,15 +1,22 @@
 import { createClient } from "@supabase/supabase-js";
+import { cookieStorage } from "./cookie-storage";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-// Same project and schema as the POS. Reporting tables carry a report_
-// prefix; profiles, stores and the approval helpers are shared outright,
-// which is the point of not standing up a second database.
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// The session goes in a cookie on .edubabyhouse.store rather than
+// localStorage, so signing in on the POS carries over to here
+// with no second login.
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    storage: cookieStorage,
+    storageKey: "ebh",
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+});
 
-// The POS side is the same client now; the alias stays so callers read
-// clearly about which half of the database they mean.
 export const posDb = supabase;
 
 export type Department =
