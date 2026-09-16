@@ -1,4 +1,5 @@
 "use client";
+import { useRef, useState, useEffect } from "react";
 
 import { Trash2, Plus } from "lucide-react";
 import type { FormField, FormSection } from "@/lib/supabase";
@@ -102,6 +103,7 @@ const COMPUTED = new Set([
   ...Object.keys(QUOTIENT),
   ...Object.keys(DIFFERENCE),
   ...Object.keys(SUM_OF),
+  "target",
 ]);
 
 // One control per field type. Everything is stored as a string except
@@ -273,12 +275,41 @@ export default function SectionBlock({
   // A table section keeps its rows as an array under the section id, so
   // adding a supplier does not need a schema change.
   const rows = (answers[section.id] as Record<string, unknown>[]) || [];
+  const targetCache = useRef(new Map<string, number | null>());
+  const [dept, setDept] = useState<string>("");
+  useEffect(() => {
+    supabase.from("profiles").select("department").eq("id", "").maybeSingle();
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) return;
+      const { data: p } = await supabase.from("profiles").select("department").eq("id", data.user.id).maybeSingle();
+      setDept(String((p as { department?: string } | null)?.department || ""));
+    });
+  }, []);
 
   function setRow(i: number, key: string, value: unknown) {
     const next = rows.map((r, idx) =>
       idx === i ? recompute({ ...r, [key]: value }) : r
     );
     onChange(section.id, next);
+
+    // Picking a KPI pulls the target the manager set, so nobody types it in.
+    if (key === "kpi" && value) {
+      const metric = String(value);
+      const cached = targetCache.current.get(metric);
+      const apply = (v: number | null) => {
+        if (v == null) return;
+        onChange(section.id, next.map((r, idx) =>
+          idx === i ? recompute({ ...r, target: v }) : r
+        ));
+      };
+      if (cached !== undefined) { apply(cached); return; }
+      supabase.rpc("get_target", { p_metric: metric, p_department: dept || null })
+        .then(({ data }) => {
+          const v = data == null ? null : Number(data);
+          targetCache.current.set(metric, v);
+          apply(v);
+        });
+    }
   }
 
   return (
