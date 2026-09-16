@@ -8,6 +8,8 @@ import {
   type FormSection, type ReportForm, type Submission, type Department,
 } from "@/lib/supabase";
 import { useAuth, isManagerTier, isDirector } from "../../auth-context";
+import ExcelImport from "@/components/ExcelImport";
+import ReconCheck from "@/components/ReconCheck";
 import SectionBlock from "../../section-block";
 import ConsolidatedPanel from "../../consolidated-panel";
 
@@ -54,6 +56,8 @@ const fmt = (v: unknown) =>
 const DEPARTMENTS: Department[] = [
   "sale", "merchandising", "warehouse", "finance", "marketing",
 ];
+
+const FINANCE_FORMS = ["cash_daily", "sale_income_daily", "purchase_payable_daily"];
 
 export default function ReportPage() {
   const { id } = useParams<{ id: string }>();
@@ -341,6 +345,24 @@ export default function ReportPage() {
             </div>
           )}
         </div>
+      )}
+
+      {FINANCE_FORMS.includes(sub.form_id) && (
+        <>
+          {!readOnly && (
+            <ExcelImport
+              formId={sub.form_id}
+              reportDate={sub.report_date}
+              sectionIds={Object.fromEntries(sections.map((x) => [x.title, x.id]))}
+              onApply={(vals) => {
+                const next = { ...answers, ...vals };
+                setAnswers(next);
+                setDirty(true);
+              }}
+            />
+          )}
+          <ReconCheck formId={sub.form_id} sections={sections} answers={answers} />
+        </>
       )}
 
       {sections.map((s) => (
