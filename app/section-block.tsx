@@ -27,6 +27,7 @@ const DERIVED: Record<string, { of: string; per: string }> = {
 // Quotients: target = round(of / per) — a money figure, not a percentage.
 const QUOTIENT: Record<string, { of: string; per: string }> = {
   avg_invoice: { of: "actual_sale", per: "invoice_count" },
+  cost_per_result: { of: "amount_spent", per: "result" },
 };
 
 // Differences: target = a - b. Warehouse counts what arrived against what
