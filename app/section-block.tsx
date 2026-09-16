@@ -10,6 +10,13 @@ import type { FormField, FormSection } from "@/lib/supabase";
 // and a difference column is a subtraction nobody should be doing by eye.
 //
 // Ratios: target = round(of / per * 100, 1)
+// Comparison Period ရွေးထားတာနဲ့ အတိုင်းအတာ လိုက်ညှိ
+const UNIT_BY_CMP: Record<string, [string, string]> = {
+  "1 Day": ["ယခုရက်", "ယခင်ရက်"],
+  "1 Week": ["ယခုအပတ်", "ယခင်အပတ်"],
+  "1 Month": ["ယခုလ", "ယခင်လ"],
+};
+
 const DERIVED: Record<string, { of: string; per: string }> = {
   achievement_pct: { of: "actual_sale", per: "daily_target" },
   conversion_rate: { of: "invoice_count", per: "customer_entrance" },
@@ -309,6 +316,26 @@ export default function SectionBlock({
           const v = data == null ? null : Number(data);
           targetCache.current.set(metric, v);
           apply(v);
+        });
+
+      // Comparison Period က အတိုင်းအတာကို ပြောပြီးသား, ပြီးတော့ အရင်ကာလ data ကို ဆွဲ
+      const cmp = String(answers["comparison_period"] || "");
+      const units = UNIT_BY_CMP[cmp];
+      const unit = units ? units[0] : String((next[i] || {}).this_period_unit || "");
+      const prevUnit = units ? units[1] : String((next[i] || {}).last_period_unit || "");
+      supabase
+        .rpc("get_prev_kpi", {
+          p_form_id: section.form_id,
+          p_kpi: metric,
+          p_before: String(answers["period_start"] || new Date().toISOString().slice(0, 10)),
+          p_unit: prevUnit || unit,
+        })
+        .then(({ data }) => {
+          onChange(section.id, next.map((r, idx) => idx !== i ? r : recompute({
+            ...r,
+            ...(units ? { this_period_unit: units[0], last_period_unit: units[1] } : {}),
+            ...(data == null ? {} : { last_period: Number(data) }),
+          })));
         });
     }
   }
