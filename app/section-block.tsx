@@ -2,6 +2,7 @@
 import { useRef, useState, useEffect } from "react";
 
 import { Trash2, Plus } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 import type { FormField, FormSection } from "@/lib/supabase";
 
 // Figures the form can work out for itself. Typing a percentage that the
