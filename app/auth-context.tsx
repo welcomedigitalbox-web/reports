@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { useRouter, usePathname } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { posDb, type Profile } from "@/lib/supabase";
-import { APP_URL, canAccess } from "@/lib/apps";
+import { APP_URL, canAccess, applyAppAccess } from "@/lib/apps";
 
 type AuthContextType = {
   session: Session | null;
@@ -52,6 +52,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .eq("id", userId)
       .single();
     await loadRoleTiers();
+    const { data: acc } = await posDb.from("org_app_access").select("app, department");
+    applyAppAccess((acc as { app: string; department: string }[]) || []);
     setProfile((data as Profile) || null);
     setLoading(false);
   }
