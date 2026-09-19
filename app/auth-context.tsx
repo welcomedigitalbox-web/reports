@@ -51,6 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .select("id, email, role, store_id, department, is_dept_head, reports_to")
       .eq("id", userId)
       .single();
+    await loadRoleTiers();
     setProfile((data as Profile) || null);
     setLoading(false);
   }
@@ -94,15 +95,33 @@ export function useAuth() {
   return ctx;
 }
 
-// Who may sign off a report: department heads and the tier above them.
+// Who may sign off a report is decided in the database, not here: org_roles
+// carries a tier for every role, so a new role needs no code change. The
+// arrays below are only what we fall back on before that table has loaded.
+const TIER: Record<string, string> = {};
+
+const FALLBACK_HEADS = [
+  "sale_manager", "merchandising_manager", "warehouse_manager",
+  "finance_manager", "marketing_manager", "hr_manager",
+];
+const FALLBACK_DIRECTORS = ["operation_director", "owner", "admin"];
+
+export async function loadRoleTiers(): Promise<void> {
+  const { data } = await posDb.from("org_roles").select("key, tier, active");
+  const rows = (data as { key: string; tier: string; active: boolean }[]) || [];
+  for (const r of rows) if (r.active) TIER[r.key] = r.tier;
+}
+
 export function isManagerTier(role?: string | null): boolean {
-  return !!role && [
-    "sale_manager", "merchandising_manager", "warehouse_manager",
-    "finance_manager", "marketing_manager",
-    "operation_director", "owner", "admin",
-  ].includes(role);
+  if (!role) return false;
+  const t = TIER[role];
+  if (t) return t === "head" || t === "director";
+  return FALLBACK_HEADS.includes(role) || FALLBACK_DIRECTORS.includes(role);
 }
 
 export function isDirector(role?: string | null): boolean {
-  return !!role && ["operation_director", "owner", "admin"].includes(role);
+  if (!role) return false;
+  const t = TIER[role];
+  if (t) return t === "director";
+  return FALLBACK_DIRECTORS.includes(role);
 }
