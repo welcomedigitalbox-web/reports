@@ -115,7 +115,7 @@ export default function ReportPage() {
     const { data: f } = await supabase
       .from("report_forms").select("*").eq("id", (s as Submission).form_id).single();
 
-    const [structure, { data: st }, { data: pp }, { data: hist, error: histErr }] = await Promise.all([
+    const [structure, { data: st }, { data: pp }, { data: hist, error: histErr }, { data: appr }] = await Promise.all([
 
       loadFormStructure((s as Submission).form_id),
       supabase.from("stores").select("id, name").order("name"),
@@ -123,7 +123,10 @@ export default function ReportPage() {
       supabase.from("report_edits").select("*")
         .eq("submission_id", id)
         .order("edited_at", { ascending: false }),
+      supabase.rpc("can_approve_email", { p_email: (s as Submission).created_by }),
     ]);
+
+    setApproverOk(!!appr);
 
     setSub(s as Submission);
     setForm(f as ReportForm);
@@ -148,15 +151,7 @@ export default function ReportPage() {
     if (sub.status !== "submitted") return false;
     if (sub.created_by === profile.email && !isDirector(profile.role)) return false;
     return approverOk;
-  }, [sub, form, profile]);
-
-  useEffect(() => {
-    if (!sub?.created_by) return;
-    (async () => {
-      const { data } = await supabase.rpc("can_approve_email", { p_email: sub.created_by });
-      setApproverOk(!!data);
-    })();
-  }, [sub?.created_by]);
+  }, [sub, form, profile, approverOk]);
 
   const canDecideRequest =
     !!sub && ["cancel_requested", "edit_requested"].includes(sub.status)
