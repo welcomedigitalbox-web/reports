@@ -26,6 +26,7 @@ export default function ReviewPage() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [who, setWho] = useState("");
+  const [dept, setDept] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -65,6 +66,16 @@ export default function ReviewPage() {
     });
   }, []);
 
+  const formDept = useMemo(
+    () => new Map(forms.map((f) => [f.id, String(f.department || "")])),
+    [forms]
+  );
+
+  const depts = useMemo(() => {
+    const set = new Set(forms.map((f) => String(f.department || "")).filter(Boolean));
+    return Array.from(set).sort();
+  }, [forms]);
+
   const officeForms = useMemo(
     () => new Set(forms.filter((f) => String(f.department) === "office").map((f) => f.id)),
     [forms]
@@ -87,8 +98,9 @@ export default function ReviewPage() {
     if (from) out = out.filter((r) => String(r.report_date) >= from);
     if (to) out = out.filter((r) => String(r.report_date) <= to);
     if (who) out = out.filter((r) => String(r.created_by) === who);
+    if (dept) out = out.filter((r) => String(formDept.get(r.form_id) || "") === dept);
     return out;
-  }, [rows, tab, profile?.role, mgrEmails, officeForms, from, to, who]);
+  }, [rows, tab, profile?.role, mgrEmails, officeForms, from, to, who, dept, formDept]);
 
   const people = useMemo(() => {
     const set = new Set(rows.map((r) => String(r.created_by)).filter(Boolean));
@@ -147,6 +159,13 @@ export default function ReviewPage() {
         <input type="date" value={to} min={from || undefined}
           onChange={(e) => setTo(e.target.value)}
           className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm bg-white" />
+        <select value={dept} onChange={(e) => setDept(e.target.value)}
+          className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm bg-white capitalize">
+          <option value="">department</option>
+          {depts.map((d2) => (
+            <option key={d2} value={d2}>{d2}</option>
+          ))}
+        </select>
         <select value={who} onChange={(e) => setWho(e.target.value)}
           className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm bg-white">
           <option value="">အားစုး</option>
@@ -154,8 +173,8 @@ export default function ReviewPage() {
             <option key={m} value={m}>{m}</option>
           ))}
         </select>
-        {(from || to || who) && (
-          <button onClick={() => { setFrom(""); setTo(""); setWho(""); }}
+        {(from || to || who || dept) && (
+          <button onClick={() => { setFrom(""); setTo(""); setWho(""); setDept(""); }}
             className="text-xs text-blue-600 px-2 py-1.5">clear</button>
         )}
         <span className="text-xs text-slate-400 ml-auto">{visible.length}</span>
