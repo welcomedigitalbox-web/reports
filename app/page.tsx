@@ -100,6 +100,29 @@ export default function HomePage() {
     }
   }
 
+  // A draft has not been filed yet, so it is not a record — the person who
+  // started it by mistake should be able to take it back. Anything already
+  // submitted goes through a cancel request instead, and the delete policy in
+  // the database enforces that whatever this screen offers.
+  async function deleteDraft(s: Submission) {
+    const form = forms.find((f) => f.id === s.form_id);
+    if (!confirm(`${form?.name || s.form_id} · ${s.report_date} ကို ဖျက်မလား?`)) return;
+
+    setBusy(s.id);
+    setError("");
+    const { error: err } = await supabase
+      .from("report_submissions")
+      .delete()
+      .eq("id", s.id);
+    setBusy(null);
+
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    setMine((rows) => rows.filter((r) => r.id !== s.id));
+  }
+
   if (authLoading || loading) {
     return <div className="pt-16 text-center text-sm text-slate-400">…</div>;
   }
@@ -167,25 +190,35 @@ export default function HomePage() {
         {mine.map((s) => {
           const form = forms.find((f) => f.id === s.form_id);
           return (
-            <button
-              key={s.id}
-              onClick={() => router.push(`/report/${s.id}`)}
-              className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-slate-50"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <FileText size={16} className="text-slate-400 shrink-0" />
-                <div className="min-w-0">
-                  <div className="text-sm truncate">{form?.name || s.form_id}</div>
-                  <div className="text-xs text-slate-400">
-                    {s.report_date}
-                    {s.store_id && ` · ${s.store_id}`}
+            <div key={s.id} className="flex items-center hover:bg-slate-50">
+              <button
+                onClick={() => router.push(`/report/${s.id}`)}
+                className="flex-1 flex items-center justify-between px-4 py-3 text-left min-w-0"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <FileText size={16} className="text-slate-400 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-sm truncate">{form?.name || s.form_id}</div>
+                    <div className="text-xs text-slate-400">
+                      {s.report_date}
+                      {s.store_id && ` · ${s.store_id}`}
+                    </div>
                   </div>
                 </div>
-              </div>
-              <span className={`px-2 py-0.5 rounded text-xs font-medium shrink-0 ${STATUS_TONE[s.status]}`}>
-                {s.status.replace("_", " ")}
-              </span>
-            </button>
+                <span className={`px-2 py-0.5 rounded text-xs font-medium shrink-0 ${STATUS_TONE[s.status]}`}>
+                  {s.status.replace("_", " ")}
+                </span>
+              </button>
+              {s.status === "draft" && (
+                <button
+                  onClick={() => deleteDraft(s)}
+                  disabled={busy === s.id}
+                  className="px-3 py-3 text-xs text-red-600 disabled:opacity-40 shrink-0"
+                >
+                  ဖျက်
+                </button>
+              )}
+            </div>
           );
         })}
         {mine.length === 0 && (
