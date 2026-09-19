@@ -23,6 +23,9 @@ export default function ReviewPage() {
   const [rows, setRows] = useState<Submission[]>([]);
   const [forms, setForms] = useState<ReportForm[]>([]);
   const [tab, setTab] = useState<SubmissionStatus | "all">("submitted");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [who, setWho] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -73,14 +76,24 @@ export default function ReviewPage() {
     const seen = isDirector(profile?.role)
       ? rows.filter((r) => r.status !== "submitted" || mgrEmails.has(String(r.created_by)) || officeForms.has(r.form_id))
       : rows;
-    if (tab === "all") return seen;
+    let out = seen;
     if (tab === "submitted") {
-      return seen.filter((r) =>
+      out = out.filter((r) =>
         ["submitted", "cancel_requested", "edit_requested"].includes(r.status)
       );
+    } else if (tab !== "all") {
+      out = out.filter((r) => r.status === tab);
     }
-    return seen.filter((r) => r.status === tab);
-  }, [rows, tab, profile?.role, mgrEmails, officeForms]);
+    if (from) out = out.filter((r) => String(r.report_date) >= from);
+    if (to) out = out.filter((r) => String(r.report_date) <= to);
+    if (who) out = out.filter((r) => String(r.created_by) === who);
+    return out;
+  }, [rows, tab, profile?.role, mgrEmails, officeForms, from, to, who]);
+
+  const people = useMemo(() => {
+    const set = new Set(rows.map((r) => String(r.created_by)).filter(Boolean));
+    return Array.from(set).sort();
+  }, [rows]);
 
   const counts = useMemo(() => {
     const rows2 = isDirector(profile?.role)
@@ -124,6 +137,28 @@ export default function ReviewPage() {
             )}
           </button>
         ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <input type="date" value={from} max={to || undefined}
+          onChange={(e) => setFrom(e.target.value)}
+          className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm bg-white" />
+        <span className="text-xs text-slate-400">to</span>
+        <input type="date" value={to} min={from || undefined}
+          onChange={(e) => setTo(e.target.value)}
+          className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm bg-white" />
+        <select value={who} onChange={(e) => setWho(e.target.value)}
+          className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm bg-white">
+          <option value="">အားစုး</option>
+          {people.map((m) => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
+        {(from || to || who) && (
+          <button onClick={() => { setFrom(""); setTo(""); setWho(""); }}
+            className="text-xs text-blue-600 px-2 py-1.5">clear</button>
+        )}
+        <span className="text-xs text-slate-400 ml-auto">{visible.length}</span>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
