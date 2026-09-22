@@ -30,6 +30,7 @@ export default function Header() {
     { href: "/issues", label: "Issues" },
     { href: "/sales-day", label: "Sales Day" },
     { href: "/day", label: "Dept Day" },
+    { href: "/company", label: "Company Day" },
   ];
 
   return (

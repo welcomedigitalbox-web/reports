@@ -17,7 +17,7 @@ function groupBy<T>(xs: T[], k: (x: T) => string) {
 export default function DeptDayPage() {
   const [date, setDate] = useState(today());
   const [data, setData] = useState<Form[]>([]);
-  const [pick, setPick] = useState("");
+  const [pick, setPick] = useState(typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("f") || "" : "");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
