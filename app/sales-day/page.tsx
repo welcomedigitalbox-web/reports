@@ -26,7 +26,15 @@ export default function SalesDayPage() {
   const [d, setD] = useState<Day | null>(null);
 
   useEffect(() => {
-    supabase.rpc("sales_day_rollup", { p_date: date }).then(({ data }) => setD((data as Day) || null));
+    // shops and channels both owe a report, so the missing list comes from both
+    Promise.all([
+      supabase.rpc("sales_day_rollup", { p_date: date }),
+      supabase.rpc("sales_day_missing", { p_date: date }),
+    ]).then(([r, m]) => {
+      const day = (r.data as Day) || null;
+      if (day) day.missing = (m.data as string[]) || day.missing;
+      setD(day);
+    });
   }, [date]);
 
   const T = d?.totals;
