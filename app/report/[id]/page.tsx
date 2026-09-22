@@ -376,7 +376,7 @@ export default function ReportPage() {
       {/* Anything the day threw up that another department needs to know
           about. The ticks are open on purpose: the person who saw it is
           rarely the person who knows whose problem it is. */}
-      {!readOnly && (
+      {false && !readOnly && (
         <button
           onClick={() => setIncident(true)}
           className="flex items-center gap-2 text-sm font-medium text-amber-700 mb-6"
