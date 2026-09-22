@@ -29,6 +29,7 @@ export default function Header() {
     { href: "/inbox", label: "Inbox" },
     { href: "/issues", label: "Issues" },
     { href: "/sales-day", label: "Sales Day" },
+    { href: "/day", label: "Dept Day" },
   ];
 
   return (
