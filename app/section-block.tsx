@@ -320,6 +320,7 @@ export default function SectionBlock({
     ? "kpi"
     : "";
   const canPull = !!sectionKind;
+  const compactTable = /kpi tracker/i.test(section.title || "");
   // How far back the comparison looks, in days.
   function backDays(label: string) {
     if (/year/i.test(label)) return 365;
@@ -485,7 +486,63 @@ export default function SectionBlock({
         )}
       </div>
 
-      {section.is_table ? (
+      {section.is_table && compactTable ? (
+        <div className="p-4 overflow-x-auto">
+          {rows.length === 0 && (
+            <p className="text-sm text-slate-400 mb-3">No rows yet</p>
+          )}
+          {rows.length > 0 && (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-slate-500 border-b border-slate-200">
+                  {section.fields.map((f) => (
+                    <th key={f.id} className="py-2 pr-2 font-normal whitespace-nowrap">{f.label}</th>
+                  ))}
+                  {!readOnly && <th className="w-8" />}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, i) => (
+                  <tr key={i} className="border-b border-slate-100 last:border-0 align-top">
+                    {section.fields.map((f) => (
+                      <td key={f.id} className="py-1.5 pr-2 min-w-[7rem]">
+                        <Field
+                          field={f}
+                          value={row[f.key]}
+                          onChange={(v) => setRow(i, f.key, v)}
+                          readOnly={readOnly || COMPUTED.has(f.key)}
+                          stores={stores}
+                          people={people}
+                        />
+                      </td>
+                    ))}
+                    {!readOnly && (
+                      <td className="py-1.5">
+                        <button
+                          type="button"
+                          onClick={() => onChange(section.id, rows.filter((_, x) => x !== i))}
+                          className="text-red-600"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={() => onChange(section.id, [...rows, {}])}
+              className="flex items-center gap-1.5 text-sm text-blue-600 font-medium mt-3"
+            >
+              <Plus size={14} /> Add row
+            </button>
+          )}
+        </div>
+      ) : section.is_table ? (
         <div className="p-4">
           {rows.length === 0 && (
             <p className="text-sm text-slate-400 mb-3">No rows yet</p>
