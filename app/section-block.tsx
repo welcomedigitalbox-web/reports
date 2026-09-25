@@ -295,6 +295,30 @@ export default function SectionBlock({
     });
   }, []);
 
+  // Facebook numbers are already synced nightly, so the marketing table can
+  // start filled in rather than being copied across by hand.
+  const [pulling, setPulling] = useState(false);
+  const canPull = /platform activity/i.test(section.title || "");
+  async function pullFacebook() {
+    setPulling(true);
+    try {
+      const id = window.location.pathname.split("/").filter(Boolean).pop() || "";
+      const { data: sub } = await supabase
+        .from("report_submissions").select("report_date").eq("id", id).maybeSingle();
+      const day = (sub as { report_date?: string } | null)?.report_date;
+      if (!day) return;
+      const { data } = await supabase.rpc("mkt_day_prefill", { p_date: day });
+      const pulled = (data as Record<string, unknown>[]) || [];
+      if (!pulled.length) return;
+      // Keep whatever was typed by hand; add only campaigns not already listed.
+      const seen = new Set(rows.map((r) => String(r.campaign ?? r.platform ?? "")));
+      const add = pulled.filter((r) => !seen.has(String(r.campaign ?? r.platform ?? "")));
+      onChange(section.id, [...rows, ...add]);
+    } finally {
+      setPulling(false);
+    }
+  }
+
   function setRow(i: number, key: string, value: unknown) {
     const next = rows.map((r, idx) =>
       idx === i ? recompute({ ...r, [key]: value }) : r
@@ -344,7 +368,15 @@ export default function SectionBlock({
   return (
     <section className="bg-white border border-slate-200 rounded-xl overflow-hidden mb-4">
       <div className="px-4 py-3 border-b border-slate-100">
-        <h3 className="font-medium text-sm">{section.title}</h3>
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="font-medium text-sm">{section.title}</h3>
+          {canPull && !readOnly && (
+            <button type="button" onClick={pullFacebook} disabled={pulling}
+              className="px-2 py-1 text-xs border border-slate-200 rounded-lg whitespace-nowrap">
+              {pulling ? "..." : "Facebook ကနေ ဆွဲယူ"}
+            </button>
+          )}
+        </div>
         {section.title_mm && (
           <p className="text-xs text-slate-500 mt-0.5">{section.title_mm}</p>
         )}
