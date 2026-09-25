@@ -88,9 +88,23 @@ export default function TargetsPage() {
       minimum_value: num(edit.minimum), target_value: num(edit.target), good_value: num(edit.good),
       lower_is_better: edit.lower, effective_from: edit.from || today(),
     });
-    if (error) { setMsg(error.message); return; }
+    // Filing the same start date again is a correction, not a new target,
+    // so the row that already carries that date is overwritten instead.
+    if (error && error.code === "23505") {
+      let q = supabase.from("report_targets").update({
+        minimum_value: num(edit.minimum), target_value: num(edit.target), good_value: num(edit.good),
+        lower_is_better: edit.lower,
+      })
+        .eq("department", r.department)
+        .eq("metric_key", r.metric_key)
+        .eq("effective_from", edit.from || today());
+      q = r.scope ? q.eq("scope", r.scope) : q.is("scope", null);
+      q = r.period ? q.eq("period", r.period) : q.is("period", null);
+      const { error: e2 } = await q;
+      if (e2) { setMsg(e2.message); return; }
+    } else if (error) { setMsg(error.message); return; }
     setEdit(null);
-    setMsg("Target အသစ် ထည့်ပြီး — " + (edit.from || today()) + " ကစ သက်ရောက်မယ်");
+    setMsg("Target သိမ်းပြီး — " + (edit.from || today()) + " ကစ သက်ရောက်မယ်");
     load();
     setTimeout(() => setMsg(""), 3000);
   }
