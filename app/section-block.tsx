@@ -413,10 +413,65 @@ export default function SectionBlock({
     }
   }
 
+  // A KPI row works out its own change and verdict, whether the numbers were
+  // pulled from Facebook or typed in by hand for TikTok.
+  const kpiPlatform = /tiktok/i.test(section.title || "") ? "TikTok" : "Facebook";
+  function periodName() {
+    const a = String(answers["period_start"] || "");
+    const b = String(answers["period_end"] || "");
+    if (!a || !b) return "weekly";
+    const days = Math.round(
+      (new Date(b + "T00:00:00Z").getTime() - new Date(a + "T00:00:00Z").getTime()) / 86400000
+    );
+    return days >= 27 ? "monthly" : days >= 5 ? "weekly" : "daily";
+  }
+  function verdict(now: number | null, target: number | null, good: number | null, lower: boolean) {
+    if (now == null || target == null) return "";
+    if (lower) return good != null && now <= good ? "Above Target" : now <= target ? "On Track" : "Below Target";
+    return good != null && now >= good ? "Above Target" : now >= target ? "On Track" : "Below Target";
+  }
+  function kpiMath(r: Record<string, unknown>, t?: { target: number | null; good: number | null; lower_is_better: boolean }) {
+    const now = r.this_period == null || r.this_period === "" ? null : Number(r.this_period);
+    const was = r.last_period == null || r.last_period === "" ? null : Number(r.last_period);
+    const target = t ? t.target : (r.target == null || r.target === "" ? null : Number(r.target));
+    const good = t ? t.good : null;
+    const lower = t ? t.lower_is_better : /cost/i.test(String(r.kpi || ""));
+    const pct = was != null && was !== 0 && now != null
+      ? Math.round(((now - was) / was) * 1000) / 10
+      : r.change_pct ?? null;
+    return {
+      ...r,
+      ...(target == null ? {} : { target }),
+      change_pct: pct,
+      status: verdict(now, target, good, lower) || r.status || "",
+    };
+  }
+
   function setRow(i: number, key: string, value: unknown) {
     const next = rows.map((r, idx) =>
       idx === i ? recompute({ ...r, [key]: value }) : r
     );
+
+    if (compactTable) {
+      // KPI rows: redo the sums here rather than waiting for a pull.
+      onChange(section.id, next.map((r, idx) => (idx === i ? kpiMath(r) : r)));
+      if (key === "kpi" && value) {
+        supabase
+          .from("mkt_kpi_targets")
+          .select("target, good, lower_is_better")
+          .eq("platform", kpiPlatform)
+          .eq("period", periodName())
+          .eq("kpi", String(value))
+          .maybeSingle()
+          .then(({ data }) => {
+            const t = data as { target: number | null; good: number | null; lower_is_better: boolean } | null;
+            if (!t) return;
+            onChange(section.id, next.map((r, idx) => (idx === i ? kpiMath(r, t) : r)));
+          });
+      }
+      return;
+    }
+
     onChange(section.id, next);
 
     // Picking a KPI pulls the target the manager set, so nobody types it in.
