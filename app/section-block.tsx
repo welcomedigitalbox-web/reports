@@ -298,10 +298,70 @@ export default function SectionBlock({
   // Facebook numbers are already synced nightly, so the marketing table can
   // start filled in rather than being copied across by hand.
   const [pulling, setPulling] = useState(false);
-  const canPull = /platform activity/i.test(section.title || "");
-  async function pullFacebook() {
-    setPulling(true);
-    try {
+  const sectionKind = /platform activity/i.test(section.title || "")
+    ? "daily"
+    : /facebook performance/i.test(section.title || "")
+    ? "fbperf"
+    : /kpi tracker/i.test(section.title || "")
+    ? "kpi"
+    : "";
+  const canPull = !!sectionKind;
+  // How far back the comparison looks, in days.
+  function backDays(label: string) {
+    if (/year/i.test(label)) return 365;
+    if (/month/i.test(label)) return 30;
+    if (/week/i.test(label)) return 7;
+    return 1;
+  }
+  function shift(day: string, days: number) {
+    const d = new Date(day + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() - days);
+    return d.toISOString().slice(0, 10);
+  }
+
+  async function pullWeekly() {
+    const from = String(answers["period_start"] || "");
+    const to = String(answers["period_end"] || "");
+    if (!from || !to) {
+      alert("Report Period · စ နဲ့ ဆုံး ကို အရင်ရွေးပါ");
+      return;
+    }
+    const { data } = await supabase.rpc("mkt_fb_period", { p_from: from, p_to: to });
+    const cur = (data as Record<string, unknown>) || {};
+
+    if (sectionKind === "fbperf") {
+      for (const k of Object.keys(cur)) {
+        if (k !== "kpi") onChange(k, cur[k]);
+      }
+      return;
+    }
+
+    // KPI rows: this period from the range, last period from the same length before it.
+    const back = backDays(String(answers["comparison_period"] || "1 Week"));
+    const { data: prevData } = await supabase.rpc("mkt_fb_period", {
+      p_from: shift(from, back), p_to: shift(to, back),
+    });
+    const prev = ((prevData as Record<string, unknown>) || {}).kpi as
+      | { kpi: string; this_period: number | null }[]
+      | undefined;
+    const rowsIn = (cur.kpi as { kpi: string; this_period: number | null }[]) || [];
+    const filled = rowsIn.map((r) => {
+      const was = (prev || []).find((x) => x.kpi === r.kpi)?.this_period ?? null;
+      const now = r.this_period;
+      const pct = was != null && Number(was) !== 0 && now != null
+        ? Math.round(((Number(now) - Number(was)) / Number(was)) * 1000) / 10
+        : null;
+      return {
+        kpi: r.kpi, target: null, this_period: now, last_period: was,
+        change_pct: pct, this_period_unit: "", last_period_unit: "", status: "",
+      };
+    });
+    const seen = new Set(rows.map((r) => String(r.kpi ?? "")));
+    onChange(section.id, [...rows, ...filled.filter((r) => !seen.has(r.kpi))]);
+  }
+
+  async function pullDaily() {
+    {
       const id = window.location.pathname.split("/").filter(Boolean).pop() || "";
       const { data: sub } = await supabase
         .from("report_submissions").select("report_date").eq("id", id).maybeSingle();
@@ -314,8 +374,6 @@ export default function SectionBlock({
       const seen = new Set(rows.map((r) => String(r.campaign ?? r.platform ?? "")));
       const add = pulled.filter((r) => !seen.has(String(r.campaign ?? r.platform ?? "")));
       onChange(section.id, [...rows, ...add]);
-    } finally {
-      setPulling(false);
     }
   }
 
@@ -371,7 +429,12 @@ export default function SectionBlock({
         <div className="flex items-center justify-between gap-2">
           <h3 className="font-medium text-sm">{section.title}</h3>
           {canPull && !readOnly && (
-            <button type="button" onClick={pullFacebook} disabled={pulling}
+            <button type="button" disabled={pulling}
+              onClick={async () => {
+                setPulling(true);
+                try { await (sectionKind === "daily" ? pullDaily() : pullWeekly()); }
+                finally { setPulling(false); }
+              }}
               className="px-2 py-1 text-xs border border-slate-200 rounded-lg whitespace-nowrap">
               {pulling ? "..." : "Facebook ကနေ ဆွဲယူ"}
             </button>
