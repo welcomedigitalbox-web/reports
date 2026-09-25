@@ -3,10 +3,10 @@ import { supabase } from "@/lib/supabase";
 import { useEffect, useState } from "react";
 
 type Row = {
-  id: string; department: string; metric_key: string; scope: string | null;
-  period: string | null; target_value: number | null; minimum_value: number | null;
-  good_value: number | null; lower_is_better: boolean; effective_from: string; note: string | null;
-  form_id?: string | null;
+  id: string; department: string; form_id?: string | null; metric_key: string;
+  scope: string | null; period: string | null;
+  target_value: number | null; minimum_value: number | null; good_value: number | null;
+  lower_is_better: boolean; effective_from: string; note: string | null;
 };
 type Dept = { code: string; name: string };
 
@@ -16,6 +16,7 @@ const PERIODS = [
   { key: "monthly", label: "Monthly" },
 ];
 const today = () => new Date().toISOString().slice(0, 10);
+const show = (v: number | null) => (v == null ? "—" : Number(v).toLocaleString());
 
 export default function TargetsPage() {
   const [depts, setDepts] = useState<Dept[]>([]);
@@ -28,10 +29,13 @@ export default function TargetsPage() {
   const [myDept, setMyDept] = useState("");
   const [msg, setMsg] = useState("");
   const [history, setHistory] = useState<Row[] | null>(null);
+  const [edit, setEdit] = useState<{ row: Row; minimum: string; target: string; good: string; lower: boolean; from: string } | null>(null);
+  const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState({ metric: "", minimum: "", target: "", good: "", lower: false, from: today() });
 
   const isDirector = ["operation_director", "owner", "admin", "om", "md"].includes(role);
   const canEdit = isDirector || (dept === myDept && /manager/i.test(role));
+  const num = (v: string) => (v === "" ? null : Number(v));
 
   useEffect(() => {
     supabase.from("departments").select("code, name").eq("active", true).order("name")
@@ -48,13 +52,13 @@ export default function TargetsPage() {
 
   async function load() {
     if (!dept) return;
-    // Only what is in force today; the older rows stay as history.
     const { data } = await supabase
       .from("report_targets").select("*")
       .eq("department", dept).eq("period", period)
       .lte("effective_from", today())
       .order("metric_key").order("effective_from", { ascending: false });
     const all = (data as Row[]) || [];
+    // The newest row that has already started is the one in force.
     const seen = new Set<string>();
     const current = all.filter((r) => {
       const k = r.metric_key + "|" + (r.scope || "");
@@ -73,34 +77,35 @@ export default function TargetsPage() {
 
   const shown = scope ? rows.filter((r) => (r.scope || "") === scope) : rows;
 
-  // A changed target is a new row, so last month's report still shows last month's target.
-  async function saveNew(r: Row, patch: Partial<Row>) {
+  // Editing never overwrites: it files a new target that starts on a chosen day.
+  async function saveEdit() {
+    if (!edit) return;
     setMsg("");
+    const r = edit.row;
     const { error } = await supabase.from("report_targets").insert({
       department: r.department, form_id: r.form_id ?? null, metric_key: r.metric_key,
       scope: r.scope, period: r.period,
-      target_value: patch.target_value ?? r.target_value,
-      minimum_value: patch.minimum_value ?? r.minimum_value,
-      good_value: patch.good_value ?? r.good_value,
-      lower_is_better: patch.lower_is_better ?? r.lower_is_better,
-      effective_from: today(),
+      minimum_value: num(edit.minimum), target_value: num(edit.target), good_value: num(edit.good),
+      lower_is_better: edit.lower, effective_from: edit.from || today(),
     });
-    if (error) setMsg(error.message);
-    else { setMsg("သိမ်းပြီး — ဒီနေ့ကစပြီး သက်ရောက်မယ်"); load(); setTimeout(() => setMsg(""), 2500); }
+    if (error) { setMsg(error.message); return; }
+    setEdit(null);
+    setMsg("Target အသစ် ထည့်ပြီး — " + (edit.from || today()) + " ကစ သက်ရောက်မယ်");
+    load();
+    setTimeout(() => setMsg(""), 3000);
   }
-
-  const num = (v: string) => (v === "" ? null : Number(v));
 
   async function addRow() {
     setMsg("");
     if (!draft.metric.trim()) { setMsg("KPI နာမည် ထည့်ပါ"); return; }
     const { error } = await supabase.from("report_targets").insert({
       department: dept, metric_key: draft.metric.trim(), scope: scope || null, period,
-      target_value: num(draft.target), minimum_value: num(draft.minimum), good_value: num(draft.good),
+      minimum_value: num(draft.minimum), target_value: num(draft.target), good_value: num(draft.good),
       lower_is_better: draft.lower, effective_from: draft.from || today(),
     });
     if (error) { setMsg(error.message); return; }
     setDraft({ metric: "", minimum: "", target: "", good: "", lower: false, from: today() });
+    setAdding(false);
     load();
   }
 
@@ -108,7 +113,7 @@ export default function TargetsPage() {
     const { data } = await supabase
       .from("report_targets").select("*")
       .eq("department", r.department).eq("metric_key", r.metric_key)
-      .eq("period", r.period || "")
+      .eq("period", r.period || "").eq("scope", r.scope || "")
       .order("effective_from", { ascending: false });
     setHistory((data as Row[]) || []);
   }
@@ -118,14 +123,13 @@ export default function TargetsPage() {
       <div>
         <h1 className="text-xl font-semibold">Targets</h1>
         <p className="text-sm text-slate-500">
-          Report ထဲက Target အကွက်တွေက ဒီစာရင်းကနေ ဖြည့်တယ်။ ပြင်လိုက်ရင် ဒီနေ့ကစပြီး သက်ရောက်ပြီး အဟောင်းက သမိုင်းအဖြစ် ကျန်တယ်။
+          Report ထဲက Target အကွက်တွေက ဒီစာရင်းကနေ ဖြည့်တယ်။ ပြင်တိုင်း အသစ်တစ်ကြောင်း ဖြစ်ပြီး အဟောင်းက သမိုင်းအဖြစ် ကျန်တယ်။
         </p>
       </div>
 
       <div className="flex flex-wrap gap-2 items-center">
-        <select value={dept} onChange={(e) => setDept(e.target.value)}
-          className="border border-slate-200 rounded-lg px-2 py-1.5 text-sm"
-          disabled={!isDirector}>
+        <select value={dept} onChange={(e) => setDept(e.target.value)} disabled={!isDirector}
+          className="border border-slate-200 rounded-lg px-2 py-1.5 text-sm">
           {depts.map((d) => <option key={d.code} value={d.code}>{d.name}</option>)}
         </select>
         {PERIODS.map((p) => (
@@ -145,6 +149,12 @@ export default function TargetsPage() {
             ))}
           </>
         )}
+        {canEdit && (
+          <button onClick={() => setAdding((v) => !v)}
+            className="ml-auto px-3 py-1.5 bg-slate-900 text-white rounded-lg text-sm">
+            {adding ? "ပိတ်" : "+ KPI အသစ်"}
+          </button>
+        )}
       </div>
 
       {!canEdit && (
@@ -152,58 +162,14 @@ export default function TargetsPage() {
           ကြည့်ရုံပဲ ရပါတယ် — ပြင်ခွင့်က အဲ့ department ရဲ့ manager မှာ။
         </div>
       )}
-      {msg && <div className="text-sm text-slate-600">{msg}</div>}
+      {msg && <div className="text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg p-2">{msg}</div>}
 
-      <div className="border border-slate-200 rounded-xl overflow-x-auto bg-white">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-slate-500 border-b border-slate-200">
-              <th className="py-2 px-3">KPI</th>
-              <th className="py-2 px-3 w-28">Minimum</th>
-              <th className="py-2 px-3 w-28">Target</th>
-              <th className="py-2 px-3 w-28">Good</th>
-              <th className="py-2 px-3 w-20">နည်းလေကောင်း</th>
-              <th className="py-2 px-3 w-28">စတင်ရက်</th>
-              <th className="py-2 px-3 w-16" />
-            </tr>
-          </thead>
-          <tbody>
-            {shown.length === 0 && (
-              <tr><td className="py-3 px-3 text-slate-400" colSpan={7}>Target မရှိသေးပါ။</td></tr>
-            )}
-            {shown.map((r) => (
-              <tr key={r.id} className="border-b border-slate-100 last:border-0">
-                <td className="py-2 px-3">{r.metric_key}</td>
-                {(["minimum_value", "target_value", "good_value"] as const).map((k) => (
-                  <td key={k} className="py-2 px-3">
-                    <input type="number" step="any" disabled={!canEdit} defaultValue={r[k] ?? ""}
-                      onBlur={(e) => {
-                        const v = num(e.target.value);
-                        if (v !== r[k]) saveNew(r, { [k]: v } as Partial<Row>);
-                      }}
-                      className="w-24 border border-slate-200 rounded-lg px-2 py-1 disabled:bg-slate-50" />
-                  </td>
-                ))}
-                <td className="py-2 px-3">
-                  <input type="checkbox" disabled={!canEdit} checked={r.lower_is_better}
-                    onChange={(e) => saveNew(r, { lower_is_better: e.target.checked })} />
-                </td>
-                <td className="py-2 px-3 text-slate-500">{r.effective_from}</td>
-                <td className="py-2 px-3">
-                  <button onClick={() => showHistory(r)} className="text-blue-600 text-xs">သမိုင်း</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {canEdit && (
+      {adding && canEdit && (
         <div className="border border-slate-200 rounded-xl p-3 bg-white flex flex-wrap items-end gap-2">
           <div>
             <div className="text-xs text-slate-500">KPI</div>
             <input value={draft.metric} onChange={(e) => setDraft({ ...draft, metric: e.target.value })}
-              placeholder="ဥပမာ Views" className="border border-slate-200 rounded-lg px-2 py-1 w-44" />
+              placeholder="ဥပမာ Post Views" className="border border-slate-200 rounded-lg px-2 py-1 w-44" />
           </div>
           {(["minimum", "target", "good"] as const).map((k) => (
             <div key={k}>
@@ -215,8 +181,7 @@ export default function TargetsPage() {
           ))}
           <div>
             <div className="text-xs text-slate-500">စတင်ရက်</div>
-            <input type="date" value={draft.from}
-              onChange={(e) => setDraft({ ...draft, from: e.target.value })}
+            <input type="date" value={draft.from} onChange={(e) => setDraft({ ...draft, from: e.target.value })}
               className="border border-slate-200 rounded-lg px-2 py-1" />
           </div>
           <label className="text-xs text-slate-500 flex items-center gap-1">
@@ -224,32 +189,121 @@ export default function TargetsPage() {
               onChange={(e) => setDraft({ ...draft, lower: e.target.checked })} />
             နည်းလေကောင်း
           </label>
-          <button onClick={addRow} className="px-3 py-1.5 bg-slate-900 text-white rounded-lg text-sm">
-            KPI ထည့်
-          </button>
+          <button onClick={addRow} className="px-3 py-1.5 bg-slate-900 text-white rounded-lg text-sm">သိမ်း</button>
+        </div>
+      )}
+
+      <div className="border border-slate-200 rounded-xl overflow-x-auto bg-white">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-slate-500 border-b border-slate-200">
+              <th className="py-2 px-3">KPI</th>
+              <th className="py-2 px-3 w-24">Platform</th>
+              <th className="py-2 px-3 w-24 text-right">Minimum</th>
+              <th className="py-2 px-3 w-24 text-right">Target</th>
+              <th className="py-2 px-3 w-24 text-right">Good</th>
+              <th className="py-2 px-3 w-20">နည်းလေကောင်း</th>
+              <th className="py-2 px-3 w-28">စတင်ရက်</th>
+              <th className="py-2 px-3 w-28" />
+            </tr>
+          </thead>
+          <tbody>
+            {shown.length === 0 && (
+              <tr><td className="py-3 px-3 text-slate-400" colSpan={8}>Target မရှိသေးပါ။</td></tr>
+            )}
+            {shown.map((r) => (
+              <tr key={r.id} className="border-b border-slate-100 last:border-0">
+                <td className="py-2 px-3">{r.metric_key}</td>
+                <td className="py-2 px-3 text-slate-500">{r.scope || "—"}</td>
+                <td className="py-2 px-3 text-right tabular-nums">{show(r.minimum_value)}</td>
+                <td className="py-2 px-3 text-right tabular-nums font-medium">{show(r.target_value)}</td>
+                <td className="py-2 px-3 text-right tabular-nums">{show(r.good_value)}</td>
+                <td className="py-2 px-3">{r.lower_is_better ? "✓" : ""}</td>
+                <td className="py-2 px-3 text-slate-500">{r.effective_from}</td>
+                <td className="py-2 px-3 whitespace-nowrap">
+                  {canEdit && (
+                    <button
+                      onClick={() => setEdit({
+                        row: r,
+                        minimum: r.minimum_value == null ? "" : String(r.minimum_value),
+                        target: r.target_value == null ? "" : String(r.target_value),
+                        good: r.good_value == null ? "" : String(r.good_value),
+                        lower: r.lower_is_better,
+                        from: today(),
+                      })}
+                      className="text-blue-600 text-xs mr-3">ပြင်</button>
+                  )}
+                  <button onClick={() => showHistory(r)} className="text-slate-500 text-xs">သမိုင်း</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {edit && (
+        <div className="border border-slate-300 rounded-xl p-3 bg-white space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-medium text-sm">
+              Target အသစ် — {edit.row.metric_key}
+              <span className="text-slate-400 font-normal"> · {edit.row.scope || "—"} · {edit.row.period}</span>
+            </h2>
+            <button onClick={() => setEdit(null)} className="text-xs text-slate-500">ပိတ်</button>
+          </div>
+          <div className="flex flex-wrap items-end gap-2">
+            {(["minimum", "target", "good"] as const).map((k) => (
+              <div key={k}>
+                <div className="text-xs text-slate-500 capitalize">{k}</div>
+                <input type="number" step="any" value={edit[k]}
+                  onChange={(e) => setEdit({ ...edit, [k]: e.target.value })}
+                  className="border border-slate-200 rounded-lg px-2 py-1 w-28" />
+              </div>
+            ))}
+            <div>
+              <div className="text-xs text-slate-500">စတင်ရက်</div>
+              <input type="date" value={edit.from}
+                onChange={(e) => setEdit({ ...edit, from: e.target.value })}
+                className="border border-slate-200 rounded-lg px-2 py-1" />
+            </div>
+            <label className="text-xs text-slate-500 flex items-center gap-1">
+              <input type="checkbox" checked={edit.lower}
+                onChange={(e) => setEdit({ ...edit, lower: e.target.checked })} />
+              နည်းလေကောင်း
+            </label>
+            <button onClick={saveEdit} className="px-3 py-1.5 bg-slate-900 text-white rounded-lg text-sm">သိမ်း</button>
+            <button onClick={() => setEdit(null)} className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm">မလုပ်တော့</button>
+          </div>
+          <p className="text-xs text-slate-500">
+            အဟောင်းက မပျက်ဘူး — စတင်ရက် မတိုင်ခင် report တွေက အဟောင်းကိုပဲ သုံးမယ်။
+          </p>
         </div>
       )}
 
       {history && (
         <div className="border border-slate-200 rounded-xl p-3 bg-white">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="font-medium text-sm">သမိုင်း — {history[0]?.metric_key}</h2>
+            <h2 className="font-medium text-sm">
+              သမိုင်း — {history[0]?.metric_key}
+              <span className="text-slate-400 font-normal"> · {history[0]?.scope || "—"}</span>
+            </h2>
             <button onClick={() => setHistory(null)} className="text-xs text-slate-500">ပိတ်</button>
           </div>
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-slate-500 border-b border-slate-200">
-                <th className="py-1">စတင်ရက်</th><th>Minimum</th><th>Target</th><th>Good</th><th>Scope</th>
+                <th className="py-1">စတင်ရက်</th>
+                <th className="text-right">Minimum</th>
+                <th className="text-right">Target</th>
+                <th className="text-right">Good</th>
               </tr>
             </thead>
             <tbody>
               {history.map((h) => (
                 <tr key={h.id} className="border-b border-slate-100 last:border-0">
                   <td className="py-1">{h.effective_from}</td>
-                  <td>{h.minimum_value ?? "—"}</td>
-                  <td>{h.target_value ?? "—"}</td>
-                  <td>{h.good_value ?? "—"}</td>
-                  <td>{h.scope || "—"}</td>
+                  <td className="text-right tabular-nums">{show(h.minimum_value)}</td>
+                  <td className="text-right tabular-nums">{show(h.target_value)}</td>
+                  <td className="text-right tabular-nums">{show(h.good_value)}</td>
                 </tr>
               ))}
             </tbody>
