@@ -137,7 +137,7 @@ export default function TargetsPage() {
       <div>
         <h1 className="text-xl font-semibold">Targets</h1>
         <p className="text-sm text-slate-500">
-          Report ထဲက Target အကွက်တွေက ဒီစာရင်းကနေ ဖြည့်တယ်။ ပြင်တိုင်း အသစ်တစ်ကြောင်း ဖြစ်ပြီး အဟောင်းက သမိုင်းအဖြစ် ကျန်တယ်။
+          Report ထဲက Target အကွက်တွေက ဒီစာရင်းကနေ ဖြည့်တယ်။ ပြင်တိုင်း အသစ်တစ်ကြောင်း ဖြစ်ပြီး အဟောင်းက မှတ်တမ်းအဖြစ် ကျန်တယ်။
         </p>
       </div>
 
@@ -247,7 +247,7 @@ export default function TargetsPage() {
                       })}
                       className="text-blue-600 text-xs mr-3">ပြင်</button>
                   )}
-                  <button onClick={() => showHistory(r)} className="text-slate-500 text-xs">သမိုင်း</button>
+                  <button onClick={() => showHistory(r)} className="text-slate-500 text-xs">မှတ်တမ်း</button>
                 </td>
               </tr>
             ))}
@@ -297,7 +297,7 @@ export default function TargetsPage() {
         <div className="border border-slate-200 rounded-xl p-3 bg-white">
           <div className="flex items-center justify-between mb-2">
             <h2 className="font-medium text-sm">
-              သမိုင်း — {history[0]?.metric_key}
+              မှတ်တမ်း — {history[0]?.metric_key}
               <span className="text-slate-400 font-normal"> · {history[0]?.scope || "—"}</span>
             </h2>
             <button onClick={() => setHistory(null)} className="text-xs text-slate-500">ပိတ်</button>
