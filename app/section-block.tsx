@@ -457,15 +457,20 @@ export default function SectionBlock({
       onChange(section.id, next.map((r, idx) => (idx === i ? kpiMath(r) : r)));
       if (key === "kpi" && value) {
         supabase
-          .from("mkt_kpi_targets")
-          .select("target, good, lower_is_better")
-          .eq("platform", kpiPlatform)
+          .from("report_targets")
+          .select("target_value, good_value, lower_is_better, effective_from")
+          .eq("department", "marketing")
+          .eq("scope", kpiPlatform)
           .eq("period", periodName())
-          .eq("kpi", String(value))
+          .eq("metric_key", String(value))
+          .lte("effective_from", String(answers["period_end"] || new Date().toISOString().slice(0, 10)))
+          .order("effective_from", { ascending: false })
+          .limit(1)
           .maybeSingle()
           .then(({ data }) => {
-            const t = data as { target: number | null; good: number | null; lower_is_better: boolean } | null;
-            if (!t) return;
+            const row = data as { target_value: number | null; good_value: number | null; lower_is_better: boolean } | null;
+            if (!row) return;
+            const t = { target: row.target_value, good: row.good_value, lower_is_better: row.lower_is_better };
             onChange(section.id, next.map((r, idx) => (idx === i ? kpiMath(r, t) : r)));
           });
       }
