@@ -316,11 +316,12 @@ export default function SectionBlock({
     ? "daily"
     : /facebook performance/i.test(section.title || "")
     ? "fbperf"
-    : /kpi tracker/i.test(section.title || "")
+    : /facebook.*kpi tracker/i.test(section.title || "")
     ? "kpi"
     : "";
   const canPull = !!sectionKind;
   const compactTable = /kpi tracker/i.test(section.title || "");
+  const facebookSection = /facebook/i.test(section.title || "");
   // How far back the comparison looks, in days.
   function backDays(label: string) {
     if (/year/i.test(label)) return 365;
@@ -355,11 +356,11 @@ export default function SectionBlock({
     const back = backDays(String(answers["comparison_period"] || "1 Week"));
     const [{ data: withTargets }, { data: prevData }] = await Promise.all([
       supabase.rpc("mkt_kpi_rows", { p_from: from, p_to: to, p_platform: "Facebook" }),
-      supabase.rpc("mkt_fb_period", { p_from: shift(from, back), p_to: shift(to, back) }),
+      supabase.rpc("mkt_kpi_rows", {
+        p_from: shift(from, back), p_to: shift(to, back), p_platform: "Facebook",
+      }),
     ]);
-    const prev = ((prevData as Record<string, unknown>) || {}).kpi as
-      | { kpi: string; this_period: number | null }[]
-      | undefined;
+    const prev = (prevData as { kpi: string; this_period: number | null }[]) || undefined;
     type KRow = {
       kpi: string; this_period: number | null; target: number | null;
       good: number | null; lower_is_better: boolean;
