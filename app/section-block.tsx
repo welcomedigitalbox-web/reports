@@ -523,7 +523,6 @@ export default function SectionBlock({
   // while it is being written.
   const managerOnly = /manager review/i.test(section.title || "");
   const isManager = /manager|director|owner|admin|^om$/i.test(role);
-  if (managerOnly && !isManager) return null;
 
   const reviewMode = managerOnly && isManager;
   const [reviewDraft, setReviewDraft] = useState<Record<string, unknown>>({});
@@ -547,6 +546,8 @@ export default function SectionBlock({
       setSavingReview(false);
     }
   }
+
+  if (managerOnly && !isManager) return null;
 
   return (
     <section className="bg-white border border-slate-200 rounded-xl overflow-hidden mb-4">
