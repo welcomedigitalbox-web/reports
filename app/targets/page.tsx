@@ -6,6 +6,7 @@ type Row = {
   id: string; department: string; metric_key: string; scope: string | null;
   period: string | null; target_value: number | null; minimum_value: number | null;
   good_value: number | null; lower_is_better: boolean; effective_from: string; note: string | null;
+  form_id?: string | null;
 };
 type Dept = { code: string; name: string };
 
