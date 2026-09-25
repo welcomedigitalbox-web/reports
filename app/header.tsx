@@ -28,9 +28,6 @@ export default function Header() {
     ...(profile.email === "admin@edu.com" ? [{ href: "/usage", label: "AI Usage" }] : []),
     { href: "/inbox", label: "Inbox" },
     { href: "/issues", label: "Issues" },
-    { href: "/sales-day", label: "Sales Day" },
-    { href: "/day", label: "Dept Day" },
-    { href: "/company", label: "Company Day" },
   ];
 
   return (
