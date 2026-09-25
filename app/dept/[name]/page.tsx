@@ -125,7 +125,33 @@ export default function DeptPage() {
     for (const s of staffSubs) {
       const a = (s.answers || {}) as Record<string, unknown>;
       for (const sec of struct[s.form_id] || []) {
-        if (!sec.is_table || !sec.fields.some((f) => f.key === "channel")) continue;
+        const hasChannel = sec.is_table && sec.fields.some((f) => f.key === "channel");
+        const hasFigures = sec.fields.some((f) => f.key === "daily_target" || f.key === "actual_sale");
+        if (!hasChannel && !hasFigures) continue;
+        if (!hasChannel) {
+          // A form without a channel column belongs to one branch outright —
+          // the wholesale and online desks each file their own.
+          const label = (s.store_id && stores[s.store_id]) || s.created_by.split("@")[0];
+          const key = String(s.store_id || label).toLowerCase();
+          const kind = kinds[key] || kinds[label.toLowerCase()]
+            || (/wholesale/i.test(label) ? "wholesale" : /online/i.test(label) ? "online" : "retail");
+          const g = groups.get(kind) || { total: blank(kind), branches: new Map<string, Agg>() };
+          const b = g.branches.get(label) || blank(label);
+          const flat = (a as Record<string, unknown>);
+          const take = (...keys: string[]) => {
+            for (const k of keys) { const n = Number(flat[k]); if (flat[k] != null && flat[k] !== "" && !isNaN(n)) return n; }
+            return 0;
+          };
+          const vals = { target: take("daily_target"), actual: take("actual_sale"),
+                         invoices: take("invoice_count", "order_count"), entrance: take("customer_entrance") };
+          for (const k of ["target", "actual", "invoices", "entrance"] as const) {
+            (g.total as unknown as Record<string, number>)[k] += vals[k];
+            (b as unknown as Record<string, number>)[k] += vals[k];
+          }
+          g.branches.set(label, b);
+          groups.set(kind, g);
+          continue;
+        }
         const rows = ((a[sec.id] ?? a[sec.title]) as Record<string, unknown>[]) || [];
         for (const r of Array.isArray(rows) ? rows : []) {
           const raw = String(r?.channel ?? "").trim();
