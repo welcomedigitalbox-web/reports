@@ -226,7 +226,7 @@ export default function DeptPage() {
                       <span>Avg invoice <b className="text-slate-900">{asv == null ? "-" : fmt(Math.round(asv))}</b></span>
                     </div>
                   </div>
-                  {c.branches.length > 1 && (
+                  {c.kind === "retail" && c.branches.length > 1 && (
                     <table className="w-full text-xs">
                       <tbody>
                         {c.branches.map((b) => {
