@@ -55,10 +55,9 @@ export default function TargetsPage() {
     const { data } = await supabase
       .from("report_targets").select("*")
       .eq("department", dept).eq("period", period)
-      .lte("effective_from", today())
       .order("metric_key").order("effective_from", { ascending: false });
     const all = (data as Row[]) || [];
-    // The newest row that has already started is the one in force.
+    // The newest row filed is the one shown, even if its start date is ahead.
     const seen = new Set<string>();
     const current = all.filter((r) => {
       const k = r.metric_key + "|" + (r.scope || "");
