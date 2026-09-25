@@ -525,6 +525,29 @@ export default function SectionBlock({
   const isManager = /manager|director|owner|admin|^om$/i.test(role);
   if (managerOnly && !isManager) return null;
 
+  const reviewMode = managerOnly && isManager;
+  const [reviewDraft, setReviewDraft] = useState<Record<string, unknown>>({});
+  const [savingReview, setSavingReview] = useState(false);
+  const [reviewMsg, setReviewMsg] = useState("");
+  async function saveReview() {
+    setSavingReview(true);
+    setReviewMsg("");
+    try {
+      const id = window.location.pathname.split("/").filter(Boolean).pop() || "";
+      const { data: sub } = await supabase
+        .from("report_submissions").select("answers").eq("id", id).maybeSingle();
+      const merged = {
+        ...(((sub as { answers?: Record<string, unknown> } | null)?.answers) || {}),
+        ...reviewDraft,
+      };
+      const { error } = await supabase
+        .from("report_submissions").update({ answers: merged }).eq("id", id);
+      setReviewMsg(error ? error.message : "သိမ်းပြီး");
+    } finally {
+      setSavingReview(false);
+    }
+  }
+
   return (
     <section className="bg-white border border-slate-200 rounded-xl overflow-hidden mb-4">
       <div className="px-4 py-3 border-b border-slate-100">
@@ -672,8 +695,14 @@ export default function SectionBlock({
               </label>
               <Field
                 field={f}
-                value={answers[f.key]}
+                value={reviewMode ? (reviewDraft[f.key] ?? answers[f.key]) : answers[f.key]}
                 onChange={(v) => {
+                  if (reviewMode) {
+                    // The report is filed; only this card is still being written.
+                    setReviewDraft((d) => ({ ...d, [f.key]: v }));
+                    if (!readOnly) onChange(f.key, v);
+                    return;
+                  }
                   // A plain section is one flat set of answers, so the
                   // recompute runs across the whole submission.
                   const next = recompute({ ...answers, [f.key]: v });
@@ -681,12 +710,21 @@ export default function SectionBlock({
                     if (next[k] !== answers[k]) onChange(k, next[k]);
                   }
                 }}
-                readOnly={readOnly || COMPUTED.has(f.key)}
+                readOnly={reviewMode ? false : readOnly || COMPUTED.has(f.key)}
                 stores={stores}
                 people={people}
               />
             </div>
           ))}
+          {reviewMode && readOnly && (
+            <div className="sm:col-span-2 flex items-center gap-3 pt-1">
+              <button type="button" onClick={saveReview} disabled={savingReview}
+                className="px-3 py-1.5 bg-slate-900 text-white rounded-lg text-sm">
+                {savingReview ? "..." : "သုံးသပ်ချက် သိမ်း"}
+              </button>
+              {reviewMsg && <span className="text-sm text-slate-600">{reviewMsg}</span>}
+            </div>
+          )}
         </div>
       )}
     </section>
