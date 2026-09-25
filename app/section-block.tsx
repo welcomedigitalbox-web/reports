@@ -181,6 +181,17 @@ function Field({
         />
       );
 
+    case "time":
+      return (
+        <input
+          type="time"
+          className={base}
+          value={String(v)}
+          disabled={readOnly}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      );
+
     case "select":
       return (
         <select
@@ -286,12 +297,15 @@ export default function SectionBlock({
   const rows = (answers[section.id] as Record<string, unknown>[]) || [];
   const targetCache = useRef(new Map<string, number | null>());
   const [dept, setDept] = useState<string>("");
+  const [role, setRole] = useState<string>("");
   useEffect(() => {
     supabase.from("profiles").select("department").eq("id", "").maybeSingle();
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) return;
       const { data: p } = await supabase.from("profiles").select("department").eq("id", data.user.id).maybeSingle();
       setDept(String((p as { department?: string } | null)?.department || ""));
+      const { data: pr } = await supabase.from("profiles").select("role").eq("id", data.user.id).maybeSingle();
+      setRole(String((pr as { role?: string } | null)?.role || ""));
     });
   }, []);
 
@@ -338,22 +352,42 @@ export default function SectionBlock({
 
     // KPI rows: this period from the range, last period from the same length before it.
     const back = backDays(String(answers["comparison_period"] || "1 Week"));
-    const { data: prevData } = await supabase.rpc("mkt_fb_period", {
-      p_from: shift(from, back), p_to: shift(to, back),
-    });
+    const [{ data: withTargets }, { data: prevData }] = await Promise.all([
+      supabase.rpc("mkt_kpi_rows", { p_from: from, p_to: to, p_platform: "Facebook" }),
+      supabase.rpc("mkt_fb_period", { p_from: shift(from, back), p_to: shift(to, back) }),
+    ]);
     const prev = ((prevData as Record<string, unknown>) || {}).kpi as
       | { kpi: string; this_period: number | null }[]
       | undefined;
-    const rowsIn = (cur.kpi as { kpi: string; this_period: number | null }[]) || [];
+    type KRow = {
+      kpi: string; this_period: number | null; target: number | null;
+      good: number | null; lower_is_better: boolean;
+    };
+    const rowsIn = ((withTargets as KRow[]) || []).length
+      ? (withTargets as KRow[])
+      : ((cur.kpi as KRow[]) || []);
+    const cmpLabel = String(answers["comparison_period"] || "");
+    const units = UNIT_BY_CMP[cmpLabel];
     const filled = rowsIn.map((r) => {
       const was = (prev || []).find((x) => x.kpi === r.kpi)?.this_period ?? null;
       const now = r.this_period;
       const pct = was != null && Number(was) !== 0 && now != null
         ? Math.round(((Number(now) - Number(was)) / Number(was)) * 1000) / 10
         : null;
+      // Above / On Track / Below, read the right way round for cost metrics.
+      let status = "";
+      if (now != null && r.target != null) {
+        const n = Number(now), t = Number(r.target), g = r.good == null ? null : Number(r.good);
+        status = r.lower_is_better
+          ? (g != null && n <= g ? "Above Target" : n <= t ? "On Track" : "Below Target")
+          : (g != null && n >= g ? "Above Target" : n >= t ? "On Track" : "Below Target");
+      }
       return {
-        kpi: r.kpi, target: null, this_period: now, last_period: was,
-        change_pct: pct, this_period_unit: "", last_period_unit: "", status: "",
+        kpi: r.kpi, target: r.target ?? null, this_period: now, last_period: was,
+        change_pct: pct,
+        this_period_unit: units ? units[0] : "",
+        last_period_unit: units ? units[1] : "",
+        status,
       };
     });
     const seen = new Set(rows.map((r) => String(r.kpi ?? "")));
@@ -422,6 +456,12 @@ export default function SectionBlock({
         });
     }
   }
+
+  // The manager writes his review inside the same report; nobody else sees it
+  // while it is being written.
+  const managerOnly = /manager review/i.test(section.title || "");
+  const isManager = /manager|director|owner|admin|^om$/i.test(role);
+  if (managerOnly && !isManager) return null;
 
   return (
     <section className="bg-white border border-slate-200 rounded-xl overflow-hidden mb-4">
