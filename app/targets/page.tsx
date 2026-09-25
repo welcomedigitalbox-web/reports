@@ -56,6 +56,24 @@ export default function TargetsPage() {
 
   const num = (v: string) => (v === "" ? null : Number(v));
 
+  const [draft, setDraft] = useState({ kpi: "", minimum: "", target: "", good: "", lower: false });
+  async function addRow() {
+    setMsg("");
+    if (!draft.kpi.trim()) { setMsg("KPI နာမည် ထည့်ပါ"); return; }
+    const { error } = await supabase.from("mkt_kpi_targets").insert({
+      platform, period, kpi: draft.kpi.trim(),
+      minimum: num(draft.minimum), target: num(draft.target), good: num(draft.good),
+      lower_is_better: draft.lower,
+    });
+    if (error) { setMsg(error.message); return; }
+    setDraft({ kpi: "", minimum: "", target: "", good: "", lower: false });
+    load();
+  }
+  async function removeRow(r: Row) {
+    const { error } = await supabase.from("mkt_kpi_targets").delete().eq("id", r.id);
+    if (error) setMsg(error.message); else load();
+  }
+
   return (
     <div className="max-w-4xl mx-auto p-4 space-y-4">
       <div>
@@ -97,6 +115,7 @@ export default function TargetsPage() {
               <th className="py-2 px-3 w-28">Target</th>
               <th className="py-2 px-3 w-28">Good</th>
               <th className="py-2 px-3 w-24">နည်းလေကောင်း</th>
+              <th className="py-2 px-3 w-16" />
             </tr>
           </thead>
           <tbody>
@@ -125,11 +144,42 @@ export default function TargetsPage() {
                     checked={r.lower_is_better}
                     onChange={(e) => save(r, { lower_is_better: e.target.checked })} />
                 </td>
+                <td className="py-2 px-3">
+                  {canEdit && (
+                    <button onClick={() => removeRow(r)} className="text-red-600 text-xs">ဖျက်</button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {canEdit && (
+        <div className="border border-slate-200 rounded-xl p-3 bg-white flex flex-wrap items-end gap-2">
+          <div>
+            <div className="text-xs text-slate-500">KPI</div>
+            <input value={draft.kpi} onChange={(e) => setDraft({ ...draft, kpi: e.target.value })}
+              placeholder="ဥပမာ Views" className="border border-slate-200 rounded-lg px-2 py-1 w-44" />
+          </div>
+          {(["minimum", "target", "good"] as const).map((k) => (
+            <div key={k}>
+              <div className="text-xs text-slate-500 capitalize">{k}</div>
+              <input type="number" step="any" value={draft[k]}
+                onChange={(e) => setDraft({ ...draft, [k]: e.target.value })}
+                className="border border-slate-200 rounded-lg px-2 py-1 w-24" />
+            </div>
+          ))}
+          <label className="text-xs text-slate-500 flex items-center gap-1">
+            <input type="checkbox" checked={draft.lower}
+              onChange={(e) => setDraft({ ...draft, lower: e.target.checked })} />
+            နည်းလေကောင်း
+          </label>
+          <button onClick={addRow} className="px-3 py-1.5 bg-slate-900 text-white rounded-lg text-sm">
+            KPI ထည့်
+          </button>
+        </div>
+      )}
 
       <p className="text-xs text-slate-500">
         “နည်းလေကောင်း” က Cost per Message လိုမျိုး — ကိန်းနည်းလေ ကောင်းလေ ဆိုတဲ့ KPI အတွက်။
