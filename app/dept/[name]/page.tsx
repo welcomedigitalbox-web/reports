@@ -10,6 +10,9 @@ import { useAuth, isDirector, isManagerTier } from "../../auth-context";
 type P = { id: string; email: string; role: string; store_id: string | null; is_dept_head: boolean };
 const EMPTY = new Set(["", "-", "nothing", "no plan", "none", "no", "n/a", "na", "nil"]);
 const NUM = new Set(["number", "money"]);
+const DERIVED = new Set(["avg_invoice", "achievement_pct", "conversion_rate"]);
+const KIND_LABEL: Record<string, string> = { retail: "Retail", wholesale: "Wholesale", online: "Online" };
+const KIND_ORDER = ["retail", "wholesale", "online"];
 const TXT = new Set(["text", "textarea"]);
 const fmt = (n: number) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(n);
 const TONE: Record<string, string> = {
@@ -28,6 +31,7 @@ export default function DeptPage() {
   const [people, setPeople] = useState<P[]>([]);
   const [struct, setStruct] = useState<Record<string, FormSection[]>>({});
   const [stores, setStores] = useState<Record<string, string>>({});
+  const [kinds, setKinds] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { if (profile) load(); /* eslint-disable-next-line */ }, [profile?.id, date, name]);
@@ -59,6 +63,14 @@ export default function DeptPage() {
     setForms(fs); setSubs((s as Submission[]) || []); setPeople((p as P[]) || []);
     setStruct(map);
     setStores(Object.fromEntries(((st as { id: string; name: string }[]) || []).map((x) => [x.id, x.name])));
+    const { data: br } = await supabase.from("report_branches").select("id,name,kind");
+    const km: Record<string, string> = {};
+    for (const b of ((br as { id: string; name: string; kind: string | null }[]) || [])) {
+      if (!b.kind) continue;
+      km[String(b.id).toLowerCase()] = b.kind;
+      km[String(b.name).toLowerCase()] = b.kind;
+    }
+    setKinds(km);
     setLoading(false);
   }
 
@@ -83,6 +95,7 @@ export default function DeptPage() {
         for (const r of Array.isArray(rows) ? rows : []) {
           for (const fd of sec.fields) {
             const v = r?.[fd.key] ?? r?.[fd.id];
+            if (DERIVED.has(fd.key)) continue;
             if (NUM.has(fd.field_type)) {
               const n = Number(v);
               if (v === "" || v == null || isNaN(n)) continue;
@@ -103,6 +116,48 @@ export default function DeptPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subs, struct, stores, forms]);
 
+  // Wholesale invoices are far larger than showroom ones, so one blended
+  // average invoice value tells nobody anything. Each channel keeps its own.
+  const channels = useMemo(() => {
+    type Agg = { name: string; target: number; actual: number; invoices: number; entrance: number };
+    const blank = (n: string): Agg => ({ name: n, target: 0, actual: 0, invoices: 0, entrance: 0 });
+    const groups = new Map<string, { total: Agg; branches: Map<string, Agg> }>();
+    for (const s of staffSubs) {
+      const a = (s.answers || {}) as Record<string, unknown>;
+      for (const sec of struct[s.form_id] || []) {
+        if (!sec.is_table || !sec.fields.some((f) => f.key === "channel")) continue;
+        const rows = ((a[sec.id] ?? a[sec.title]) as Record<string, unknown>[]) || [];
+        for (const r of Array.isArray(rows) ? rows : []) {
+          const raw = String(r?.channel ?? "").trim();
+          if (!raw) continue;
+          const label = stores[raw] || raw;
+          const kind = kinds[raw.toLowerCase()] || kinds[label.toLowerCase()] || "retail";
+          const g = groups.get(kind) || { total: blank(kind), branches: new Map<string, Agg>() };
+          const b = g.branches.get(label) || blank(label);
+          for (const [k, key] of [["target", "daily_target"], ["actual", "actual_sale"],
+                                  ["invoices", "invoice_count"], ["entrance", "customer_entrance"]] as const) {
+            const n = Number(r?.[key]);
+            if (!isNaN(n)) { (g.total as unknown as Record<string, number>)[k] += n;
+                             (b as unknown as Record<string, number>)[k] += n; }
+          }
+          g.branches.set(label, b);
+          groups.set(kind, g);
+        }
+      }
+    }
+    return KIND_ORDER.filter((k) => groups.has(k)).map((k) => ({
+      kind: k,
+      total: groups.get(k)!.total,
+      branches: [...groups.get(k)!.branches.values()].sort((x, y) => y.actual - x.actual),
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subs, struct, stores, kinds]);
+
+  const grand = useMemo(() => channels.reduce(
+    (t, c) => ({ target: t.target + c.total.target, actual: t.actual + c.total.actual,
+                 invoices: t.invoices + c.total.invoices }),
+    { target: 0, actual: 0, invoices: 0 }), [channels]);
+
   const filers = people.filter((p) => !p.is_dept_head && !isManagerTier(p.role));
   const filedBy = new Set(staffSubs.map((s) => s.created_by));
   const notFiled = filers.filter((p) => !filedBy.has(p.email));
@@ -118,6 +173,61 @@ export default function DeptPage() {
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
           className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm" />
       </div>
+
+      {channels.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-xl p-5 mb-5">
+          <div className="flex items-baseline justify-between mb-4">
+            <h2 className="text-sm font-semibold text-slate-700">By channel</h2>
+            <div className="text-xs text-slate-500">
+              Total {fmt(grand.actual)} / {fmt(grand.target)} · {fmt(grand.invoices)} invoices
+            </div>
+          </div>
+          <div className="space-y-4">
+            {channels.map((c) => {
+              const pc = c.total.target ? (c.total.actual / c.total.target) * 100 : null;
+              const asv = c.total.invoices ? c.total.actual / c.total.invoices : null;
+              return (
+                <div key={c.kind} className="rounded-lg border border-slate-200">
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 bg-slate-50 rounded-t-lg">
+                    <div className="font-medium text-sm">{KIND_LABEL[c.kind] || c.kind}</div>
+                    <div className="flex flex-wrap gap-4 text-xs text-slate-600">
+                      <span>Target <b className="text-slate-900">{fmt(c.total.target)}</b></span>
+                      <span>Actual <b className="text-slate-900">{fmt(c.total.actual)}</b></span>
+                      <span className={pc == null ? "" : pc < 80 ? "text-red-600" : "text-green-700"}>
+                        {pc == null ? "-" : fmt(pc) + "%"}
+                      </span>
+                      <span>Invoices <b className="text-slate-900">{fmt(c.total.invoices)}</b></span>
+                      <span>Avg invoice <b className="text-slate-900">{asv == null ? "-" : fmt(Math.round(asv))}</b></span>
+                    </div>
+                  </div>
+                  {c.branches.length > 1 && (
+                    <table className="w-full text-xs">
+                      <tbody>
+                        {c.branches.map((b) => {
+                          const bp = b.target ? (b.actual / b.target) * 100 : null;
+                          const ba = b.invoices ? b.actual / b.invoices : null;
+                          return (
+                            <tr key={b.name} className="border-t border-slate-100">
+                              <td className="px-4 py-2 text-slate-600">{b.name}</td>
+                              <td className="px-3 py-2 text-right text-slate-400">{fmt(b.target)}</td>
+                              <td className="px-3 py-2 text-right font-medium">{fmt(b.actual)}</td>
+                              <td className={"px-3 py-2 text-right " + (bp == null ? "" : bp < 80 ? "text-red-600" : "text-green-700")}>
+                                {bp == null ? "-" : fmt(bp) + "%"}
+                              </td>
+                              <td className="px-3 py-2 text-right text-slate-500">{fmt(b.invoices)} inv</td>
+                              <td className="px-3 py-2 text-right text-slate-500">{ba == null ? "-" : fmt(Math.round(ba))}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="bg-white border border-slate-200 rounded-xl p-5 mb-5">
         <div className="flex flex-wrap gap-2 text-xs mb-4">
