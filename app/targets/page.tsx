@@ -1,161 +1,139 @@
 "use client";
-import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { useAuth, isManagerTier, isDirector } from "../auth-context";
+import { useEffect, useState } from "react";
 
-type T = {
-  id: string; department: string; form_id: string | null; metric_key: string;
-  scope: string | null; period: string; target_value: number;
-  effective_from: string; note: string | null; set_by: string | null;
+type Row = {
+  id: string; platform: string; period: string; kpi: string;
+  minimum: number | null; target: number | null; good: number | null;
+  lower_is_better: boolean;
 };
-type Form = { id: string; name: string; department: string };
 
-const PERIODS = ["day", "week", "month"];
-const SUGGEST: Record<string, string[]> = {
-  marketing: ["Reach", "Impressions", "Engagement Rate %", "Page Followers Growth", "Ads Spend", "Ads Messages", "Cost per Message"],
-  sale: ["daily_target", "invoice_count", "conversion_rate", "avg_invoice"],
-  merchandising: ["po_confirmed", "purchase_value"],
-  warehouse: ["picking_error", "packing_error", "dispatch_on_time"],
-  finance: ["cash_difference"],
-  office: ["attendance_pct"],
-};
+const PLATFORMS = ["Facebook", "TikTok"];
+const PERIODS = [
+  { key: "daily", label: "Daily" },
+  { key: "weekly", label: "Weekly" },
+  { key: "monthly", label: "Monthly" },
+];
 
 export default function TargetsPage() {
-  const { profile, loading } = useAuth();
-  const [rows, setRows] = useState<T[]>([]);
-  const [forms, setForms] = useState<Form[]>([]);
-  const [busy, setBusy] = useState(false);
+  const [rows, setRows] = useState<Row[]>([]);
+  const [platform, setPlatform] = useState("Facebook");
+  const [period, setPeriod] = useState("daily");
   const [msg, setMsg] = useState("");
-  const [f, setF] = useState({
-    metric_key: "", target_value: "", period: "week", scope: "", form_id: "",
-    effective_from: new Date().toISOString().slice(0, 10), note: "",
-  });
-
-  const dept = isDirector(profile?.role) ? "" : String(profile?.department || "");
-  const [pickDept, setPickDept] = useState("");
-  const activeDept = dept || pickDept;
-
-  useEffect(() => { if (profile) load(); }, [profile?.id, activeDept]); // eslint-disable-line
+  const [canEdit, setCanEdit] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   async function load() {
-    const q = supabase.from("report_targets").select("*")
-      .order("department").order("metric_key").order("effective_from", { ascending: false });
-    const { data } = activeDept ? await q.eq("department", activeDept) : await q;
-    setRows((data as T[]) || []);
-    const { data: fm } = await supabase.from("report_forms").select("id,name,department").eq("active", true);
-    setForms((fm as Form[]) || []);
+    setLoading(true);
+    const { data } = await supabase
+      .from("mkt_kpi_targets").select("*")
+      .eq("platform", platform).eq("period", period).order("kpi");
+    setRows((data as Row[]) || []);
+    setLoading(false);
   }
 
-  async function add() {
-    if (!f.metric_key.trim() || f.target_value === "") { setMsg("KPI နဲ့ Target ဖြည့်ပါ"); return; }
-    if (!activeDept) { setMsg("ဌာန ရွေးပါ"); return; }
-    setBusy(true); setMsg("");
-    const { error } = await supabase.from("report_targets").insert({
-      department: activeDept, metric_key: f.metric_key.trim(),
-      target_value: Number(f.target_value), period: f.period,
-      scope: f.scope.trim() || null, form_id: f.form_id || null,
-      effective_from: f.effective_from, note: f.note.trim() || null,
-      set_by: profile?.email,
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [platform, period]);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) return;
+      const { data: p } = await supabase.from("profiles").select("role").eq("id", data.user.id).maybeSingle();
+      const role = String((p as { role?: string } | null)?.role || "");
+      setCanEdit(["marketing_manager", "operation_director", "owner", "admin", "om"].includes(role));
     });
-    setBusy(false);
-    if (error) { setMsg(error.message.includes("duplicate") ? "ဒီ KPI အတွက် ဒီရက်မှာ target ရှိပြီးသားပါ" : error.message); return; }
-    setF({ ...f, metric_key: "", target_value: "", scope: "", note: "" });
-    load();
+  }, []);
+
+  async function save(r: Row, patch: Partial<Row>) {
+    setMsg("");
+    const { error } = await supabase.from("mkt_kpi_targets").update(patch).eq("id", r.id);
+    if (error) setMsg(error.message);
+    else {
+      setRows((prev) => prev.map((x) => (x.id === r.id ? { ...x, ...patch } : x)));
+      setMsg("သိမ်းပြီး");
+      setTimeout(() => setMsg(""), 1500);
+    }
   }
 
-  async function remove(id: string) {
-    if (!confirm("ဖျက်မလား")) return;
-    await supabase.from("report_targets").delete().eq("id", id);
-    load();
-  }
-
-  if (loading) return null;
-  if (!profile || !(isManagerTier(profile.role) || isDirector(profile.role)))
-    return <div className="pt-16 text-center text-sm text-slate-400">Manager only</div>;
-
-  const inp = "border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white w-full";
-  const deptForms = forms.filter((x) => x.department === activeDept);
-  const sugg = SUGGEST[activeDept] || [];
+  const num = (v: string) => (v === "" ? null : Number(v));
 
   return (
-    <div className="max-w-4xl mx-auto pt-6">
-      <h1 className="text-xl font-semibold mb-1">KPI Target</h1>
-      <p className="text-sm text-slate-500 mb-5">
-        ဒီမှာ သတ်မှတ်ထားတဲ့ target က report form မှာ အလိုအလျောက် ပေါ်ပါမယ်
-      </p>
-
-      {isDirector(profile.role) && (
-        <select value={pickDept} onChange={(e) => setPickDept(e.target.value)} className={inp + " mb-4 max-w-xs"}>
-          <option value="">ဌာန ရွေးပါ</option>
-          {["sale", "merchandising", "marketing", "finance", "warehouse", "office"].map((d) => (
-            <option key={d} value={d}>{d}</option>
-          ))}
-        </select>
-      )}
-
-      <div className="bg-white border border-slate-200 rounded-xl p-4 mb-5">
-        <div className="grid sm:grid-cols-3 gap-3">
-          <div>
-            <label className="text-xs text-slate-500">KPI</label>
-            <input list="kpis" value={f.metric_key} onChange={(e) => setF({ ...f, metric_key: e.target.value })}
-              placeholder="ဥပမာ Reach" className={inp} />
-            <datalist id="kpis">{sugg.map((k) => <option key={k} value={k} />)}</datalist>
-          </div>
-          <div>
-            <label className="text-xs text-slate-500">Target</label>
-            <input type="number" value={f.target_value} onChange={(e) => setF({ ...f, target_value: e.target.value })} className={inp} />
-          </div>
-          <div>
-            <label className="text-xs text-slate-500">ကာလ</label>
-            <select value={f.period} onChange={(e) => setF({ ...f, period: e.target.value })} className={inp}>
-              {PERIODS.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="text-xs text-slate-500">ဆိုင် / Channel (မလိုရင် ချန်ထား)</label>
-            <input value={f.scope} onChange={(e) => setF({ ...f, scope: e.target.value })} placeholder="BAK" className={inp} />
-          </div>
-          <div>
-            <label className="text-xs text-slate-500">Form (မလိုရင် ချန်ထား)</label>
-            <select value={f.form_id} onChange={(e) => setF({ ...f, form_id: e.target.value })} className={inp}>
-              <option value="">အားလုံး</option>
-              {deptForms.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="text-xs text-slate-500">စတင်သည့်ရက်</label>
-            <input type="date" value={f.effective_from} onChange={(e) => setF({ ...f, effective_from: e.target.value })} className={inp} />
-          </div>
-        </div>
-        <div className="mt-3 flex items-center gap-3">
-          <input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} placeholder="မှတ်ချက် (optional)" className={inp} />
-          <button onClick={add} disabled={busy}
-            className="bg-blue-600 text-white rounded-lg px-5 py-2 text-sm shrink-0 disabled:opacity-50">ထည့်မည်</button>
-        </div>
-        {msg && <p className="text-sm text-red-600 mt-2">{msg}</p>}
+    <div className="max-w-4xl mx-auto p-4 space-y-4">
+      <div>
+        <h1 className="text-xl font-semibold">KPI Targets</h1>
+        <p className="text-sm text-slate-500">
+          Report ထဲက Target အကွက်တွေက ဒီစာရင်းကနေ အလိုအလျောက် ဖြည့်တယ်။
+        </p>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
-        {rows.map((r) => (
-          <div key={r.id} className="flex items-center justify-between px-4 py-3 text-sm">
-            <div className="min-w-0">
-              <div className="font-medium truncate">
-                {r.metric_key}
-                {r.scope && <span className="text-slate-400"> · {r.scope}</span>}
-              </div>
-              <div className="text-xs text-slate-400">
-                {r.department} · {r.period} · {r.effective_from} မှစ
-                {r.note && ` · ${r.note}`}
-              </div>
-            </div>
-            <div className="flex items-center gap-4 shrink-0">
-              <span className="font-semibold">{Number(r.target_value).toLocaleString()}</span>
-              <button onClick={() => remove(r.id)} className="text-slate-300 hover:text-red-600">✕</button>
-            </div>
-          </div>
+      <div className="flex flex-wrap gap-2">
+        {PLATFORMS.map((p) => (
+          <button key={p} onClick={() => setPlatform(p)}
+            className={"px-3 py-1.5 rounded-full border text-sm " + (p === platform ? "bg-slate-900 text-white" : "bg-white")}>
+            {p}
+          </button>
         ))}
-        {rows.length === 0 && <p className="text-sm text-slate-400 py-8 text-center">Target မသတ်မှတ်ရသေးပါ</p>}
+        <span className="w-px bg-slate-200 mx-1" />
+        {PERIODS.map((p) => (
+          <button key={p.key} onClick={() => setPeriod(p.key)}
+            className={"px-3 py-1.5 rounded-full border text-sm " + (p.key === period ? "bg-slate-900 text-white" : "bg-white")}>
+            {p.label}
+          </button>
+        ))}
       </div>
+
+      {!canEdit && (
+        <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+          ကြည့်ရုံပဲ ရပါတယ် — ပြင်ခွင့်က Marketing Manager မှာ။
+        </div>
+      )}
+      {msg && <div className="text-sm text-slate-600">{msg}</div>}
+
+      <div className="border border-slate-200 rounded-xl overflow-x-auto bg-white">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-slate-500 border-b border-slate-200">
+              <th className="py-2 px-3">KPI</th>
+              <th className="py-2 px-3 w-28">Minimum</th>
+              <th className="py-2 px-3 w-28">Target</th>
+              <th className="py-2 px-3 w-28">Good</th>
+              <th className="py-2 px-3 w-24">နည်းလေကောင်း</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading && (
+              <tr><td className="py-3 px-3 text-slate-400" colSpan={5}>Loading…</td></tr>
+            )}
+            {!loading && rows.length === 0 && (
+              <tr><td className="py-3 px-3 text-slate-400" colSpan={5}>ဒီ platform / period အတွက် target မရှိသေးပါ။</td></tr>
+            )}
+            {rows.map((r) => (
+              <tr key={r.id} className="border-b border-slate-100 last:border-0">
+                <td className="py-2 px-3">{r.kpi}</td>
+                {(["minimum", "target", "good"] as const).map((k) => (
+                  <td key={k} className="py-2 px-3">
+                    <input type="number" step="any" disabled={!canEdit}
+                      defaultValue={r[k] ?? ""}
+                      onBlur={(e) => {
+                        const v = num(e.target.value);
+                        if (v !== r[k]) save(r, { [k]: v } as Partial<Row>);
+                      }}
+                      className="w-24 border border-slate-200 rounded-lg px-2 py-1 disabled:bg-slate-50" />
+                  </td>
+                ))}
+                <td className="py-2 px-3">
+                  <input type="checkbox" disabled={!canEdit}
+                    checked={r.lower_is_better}
+                    onChange={(e) => save(r, { lower_is_better: e.target.checked })} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="text-xs text-slate-500">
+        “နည်းလေကောင်း” က Cost per Message လိုမျိုး — ကိန်းနည်းလေ ကောင်းလေ ဆိုတဲ့ KPI အတွက်။
+      </p>
     </div>
   );
 }
