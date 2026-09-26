@@ -140,7 +140,16 @@ export default function ReportPage() {
     setLoading(false);
   }
 
-  const mine = sub?.created_by === profile?.email;
+  // A shared report has no single owner. It belongs to everyone who has a
+  // section of their own on it, whoever happened to open it first.
+  const mine =
+    sub?.created_by === profile?.email ||
+    (!!form?.is_shared &&
+      sections.some(
+        (s) =>
+          sectionIsFor(s, profile) &&
+          !!(s.route_emails?.length || s.route_roles?.length || s.route_departments?.length)
+      ));
 
   // Editable only while it is a draft and yours. Everything after that
   // goes through a request, so an approval always refers to what was read.
@@ -248,7 +257,9 @@ export default function ReportPage() {
           <h1 className="text-xl font-semibold">{form.name}</h1>
           <p className="text-sm text-slate-500 mt-0.5">
             {sub.report_date}
-            {sub.store_id && ` · ${sub.store_id}`} · {sub.created_by}
+            {sub.store_id && ` · ${sub.store_id}`}
+            {/* A shared report is the team's, so no one name sits on top of it. */}
+            {!form.is_shared && ` · ${sub.created_by}`}
           </p>
         </div>
         <span className={`px-3 py-1 rounded text-sm font-medium shrink-0 ${STATUS_TONE[sub.status]}`}>
