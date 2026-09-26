@@ -174,11 +174,19 @@ export default function ReportPage() {
   async function save() {
     setBusy(true);
     try {
-      const { error } = await supabase
-        .from("report_submissions")
-        .update({ answers })
-        .eq("id", id);
+      // The database decides which of these answers are this person's to
+      // write, so a report several people share cannot be overwritten from
+      // the console by one of them.
+      const { data, error } = await supabase.rpc("report_save_answers", {
+        p_submission_id: id,
+        p_answers: answers,
+      });
       if (error) throw error;
+      if (data) {
+        setAnswers(
+          ((data as Submission).answers as Record<string, unknown>) || {}
+        );
+      }
       setDirty(false);
       say("Saved");
     } catch (e) {
