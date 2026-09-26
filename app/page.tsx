@@ -56,8 +56,29 @@ export default function HomePage() {
       .order("report_date", { ascending: false })
       .limit(30);
 
+    // A shared form is one report a day that the team fills in together, so
+    // it belongs on everyone's list whoever happened to open it first.
+    const sharedIds = forRole.filter((x) => x.is_shared).map((x) => x.id);
+    const { data: shared } = sharedIds.length
+      ? await supabase
+          .from("report_submissions")
+          .select("*")
+          .in("form_id", sharedIds)
+          .order("report_date", { ascending: false })
+          .limit(30)
+      : { data: [] as Submission[] };
+
+    const byId = new Map<string, Submission>();
+    for (const row of [...((s as Submission[]) || []), ...((shared as Submission[]) || [])]) {
+      byId.set(row.id, row);
+    }
+
     setForms(forRole);
-    setMine((s as Submission[]) || []);
+    setMine(
+      [...byId.values()].sort((a, b) =>
+        String(b.report_date).localeCompare(String(a.report_date))
+      )
+    );
     setLoading(false);
   }
 
@@ -75,6 +96,21 @@ export default function HomePage() {
     setBusy(form.id);
     setError("");
     try {
+      // On a shared form the second person to arrive joins the report the
+      // first one started rather than being turned away from it.
+      if (form.is_shared) {
+        const { data: already } = await supabase
+          .from("report_submissions")
+          .select("id")
+          .eq("form_id", form.id)
+          .eq("report_date", pickDate)
+          .limit(1)
+          .maybeSingle();
+        if (already) {
+          return router.push(`/report/${(already as { id: string }).id}`);
+        }
+      }
+
       // The store is the one this account works from. A head covering
       // several files against none of them in particular.
       const { data, error: err } = await supabase

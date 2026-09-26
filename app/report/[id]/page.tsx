@@ -367,13 +367,16 @@ export default function ReportPage() {
         // The reviewer's own section stays open while the report sits with
         // them: their notes belong on this report, not on a second one.
         const mineToFill = sectionIsFor(s, profile);
-        const routed = !!(s.route_roles?.length || s.route_departments?.length);
+        const routed = !!(
+          s.route_roles?.length || s.route_departments?.length || s.route_emails?.length
+        );
         const locked = routed ? !mineToFill || (readOnly && !canReview) : readOnly;
         const answered = s.fields.some((f) => {
           const a = answers[f.key];
           return a !== undefined && a !== null && a !== "";
         });
-        if (!mineToFill && !answered) return null;
+        // A private section never leaves the person it is addressed to.
+        if (!mineToFill && (s.private_to_route || !answered)) return null;
         return (
           <SectionBlock
             key={s.id}

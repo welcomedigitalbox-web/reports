@@ -70,18 +70,33 @@ export type FormSection = {
   // same report the staff filed, not on a second form.
   route_roles: string[] | null;
   route_departments: string[] | null;
+  // Two people can hold the same role, so a section may be addressed to one
+  // of them by name rather than to the role they share.
+  route_emails: string[] | null;
+  // A section nobody but its owner ever sees, filled in or not.
+  private_to_route: boolean | null;
   fields: FormField[];
 };
 
 // Whose section is this? An empty route means everyone who can open the form.
 export function sectionIsFor(
-  section: { route_roles?: string[] | null; route_departments?: string[] | null },
-  profile: { role?: string | null; department?: string | null } | null
+  section: {
+    route_roles?: string[] | null;
+    route_departments?: string[] | null;
+    route_emails?: string[] | null;
+  },
+  profile: {
+    role?: string | null;
+    department?: string | null;
+    email?: string | null;
+  } | null
 ): boolean {
   const roles = section.route_roles || [];
   const depts = section.route_departments || [];
-  if (!roles.length && !depts.length) return true;
+  const emails = section.route_emails || [];
+  if (!roles.length && !depts.length && !emails.length) return true;
   if (!profile) return false;
+  if (emails.length && profile.email && emails.includes(profile.email)) return true;
   if (roles.length && profile.role && roles.includes(profile.role)) return true;
   if (depts.length && profile.department && depts.includes(profile.department)) return true;
   return false;
@@ -97,6 +112,9 @@ export type ReportForm = {
   checked_by: string | null;
   sort_order: number;
   active: boolean;
+  // Several people fill one of these a day between them, rather than each
+  // filing a copy of their own.
+  is_shared?: boolean | null;
 };
 
 export type SubmissionStatus =
