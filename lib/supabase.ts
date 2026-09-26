@@ -65,8 +65,27 @@ export type FormSection = {
   title_mm: string | null;
   is_table: boolean;
   sort_order: number;
+  // A section can belong to one role or department rather than to everyone
+  // filling the form: the manager's own lines and their feedback live on the
+  // same report the staff filed, not on a second form.
+  route_roles: string[] | null;
+  route_departments: string[] | null;
   fields: FormField[];
 };
+
+// Whose section is this? An empty route means everyone who can open the form.
+export function sectionIsFor(
+  section: { route_roles?: string[] | null; route_departments?: string[] | null },
+  profile: { role?: string | null; department?: string | null } | null
+): boolean {
+  const roles = section.route_roles || [];
+  const depts = section.route_departments || [];
+  if (!roles.length && !depts.length) return true;
+  if (!profile) return false;
+  if (roles.length && profile.role && roles.includes(profile.role)) return true;
+  if (depts.length && profile.department && depts.includes(profile.department)) return true;
+  return false;
+}
 
 export type ReportForm = {
   id: string;

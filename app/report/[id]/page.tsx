@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AlertTriangle, Check, X, Save, Undo2 } from "lucide-react";
 import {
-  supabase, loadFormStructure, STATUS_TONE,
+  supabase, loadFormStructure, sectionIsFor, STATUS_TONE,
   type FormSection, type ReportForm, type Submission, type Department,
 } from "@/lib/supabase";
 import { useAuth, isManagerTier, isDirector } from "../../auth-context";
@@ -360,18 +360,33 @@ export default function ReportPage() {
         </>
       )}
 
-      {sections.map((s) => (
-        <SectionBlock
-          key={s.id}
-          section={s}
-          answers={answers}
-          onChange={setAnswer}
-          readOnly={readOnly}
-          stores={stores}
-          people={people}
-          defaultStore={sub.store_id || profile?.store_id}
-        />
-      ))}
+      {sections.map((s) => {
+        // A routed section belongs to one role. Everyone still sees it once
+        // it has been answered - that is the point of keeping the manager's
+        // notes on the same report - but only its owner can type in it.
+        // The reviewer's own section stays open while the report sits with
+        // them: their notes belong on this report, not on a second one.
+        const mineToFill = sectionIsFor(s, profile);
+        const routed = !!(s.route_roles?.length || s.route_departments?.length);
+        const locked = routed ? !mineToFill || (readOnly && !canReview) : readOnly;
+        const answered = s.fields.some((f) => {
+          const a = answers[f.key];
+          return a !== undefined && a !== null && a !== "";
+        });
+        if (!mineToFill && !answered) return null;
+        return (
+          <SectionBlock
+            key={s.id}
+            section={s}
+            answers={answers}
+            onChange={setAnswer}
+            readOnly={locked}
+            stores={stores}
+            people={people}
+            defaultStore={sub.store_id || profile?.store_id}
+          />
+        );
+      })}
 
       {/* Anything the day threw up that another department needs to know
           about. The ticks are open on purpose: the person who saw it is
@@ -387,7 +402,7 @@ export default function ReportPage() {
 
       <div className="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 px-4 sm:px-6 py-3">
         <div className="max-w-4xl mx-auto flex flex-wrap gap-2 justify-end">
-          {!readOnly && (
+          {(!readOnly || canReview) && (
             <>
               <button
                 onClick={save}
@@ -396,13 +411,17 @@ export default function ReportPage() {
               >
                 <Save size={14} /> Save
               </button>
-              <button
-                onClick={submitReport}
-                disabled={busy}
-                className="px-5 py-2 bg-blue-600 disabled:bg-slate-300 text-white rounded-lg text-sm font-semibold"
-              >
-                File report
-              </button>
+              {/* Filing belongs to whoever is writing the report, not to the
+                  manager who is only adding their notes to it. */}
+              {!readOnly && (
+                <button
+                  onClick={submitReport}
+                  disabled={busy}
+                  className="px-5 py-2 bg-blue-600 disabled:bg-slate-300 text-white rounded-lg text-sm font-semibold"
+                >
+                  File report
+                </button>
+              )}
             </>
           )}
 

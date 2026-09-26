@@ -151,24 +151,39 @@ function Field({
 
     case "number":
     case "money":
-    case "percent":
+    case "percent": {
+      // A money box is typed into, not nudged. type="number" put stepper
+      // arrows under the MMK label - people were clicking them by accident -
+      // and it silently refused "2,292,000", which is how the amounts arrive.
+      // So this takes text, keeps only the digits, and shows them grouped.
+      const digits = String(v).replace(/[^0-9.]/g, "");
+      const shown =
+        digits === ""
+          ? ""
+          : field.field_type === "money"
+          ? Number(digits).toLocaleString("en-US")
+          : digits;
       return (
         <div className="relative">
           <input
-            type="number"
+            type="text"
             inputMode="decimal"
-            className={base}
-            value={String(v)}
+            className={base + (field.field_type === "number" ? "" : " pr-12")}
+            value={shown}
             disabled={readOnly}
-            onChange={(e) => onChange(e.target.value === "" ? "" : Number(e.target.value))}
+            onChange={(e) => {
+              const raw = e.target.value.replace(/[^0-9.]/g, "");
+              onChange(raw === "" ? "" : Number(raw));
+            }}
           />
           {field.field_type !== "number" && (
-            <span className="absolute right-3 top-2 text-xs text-slate-400">
+            <span className="absolute right-3 top-2 text-xs text-slate-400 pointer-events-none">
               {field.field_type === "money" ? "MMK" : "%"}
             </span>
           )}
         </div>
       );
+    }
 
     case "date":
       return (
