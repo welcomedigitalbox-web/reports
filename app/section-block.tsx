@@ -535,7 +535,8 @@ export default function SectionBlock({
   }
 
   // The manager writes his review inside the same report; nobody else sees it
-  // while it is being written.
+  // while it is still blank. Once he has written something it belongs to the
+  // person who filed the report, read-only.
   const managerOnly = /manager review/i.test(section.title || "");
   const isManager = /manager|director|owner|admin|^om$/i.test(role);
 
@@ -562,7 +563,11 @@ export default function SectionBlock({
     }
   }
 
-  if (managerOnly && !isManager) return null;
+  const reviewWritten = section.fields.some((f) => {
+    const a = answers[f.key];
+    return a !== undefined && a !== null && a !== "";
+  });
+  if (managerOnly && !isManager && !reviewWritten) return null;
 
   return (
     <section className="bg-white border border-slate-200 rounded-xl overflow-hidden mb-4">
