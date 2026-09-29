@@ -10,6 +10,11 @@ Today is ${"${TODAY}"}. Currency is MMK.
 
 Views (PostgreSQL, read-only):
 - ai_reports(id, report_date, department, form_name, cadence, store, created_by, status, overall_status, submitted_at, approved_by, approved_at, reject_reason)
+   Filed reports only. A day nobody filed has no row here, so never conclude from this view that everyone filed.
+- ai_report_coverage(form_id, form_name, department, day, store_id, status)
+   One row per daily form per day for the last 60 days, whether or not it was filed.
+   status = 'missing' means nobody filed that form that day. Use THIS view for
+   questions about who did not report, late reporting, or reporting discipline.
 - ai_metrics(submission_id, report_date, department, form_name, store, created_by, status, section, row_no, metric, label, value numeric)
    common metrics: daily_target, actual_sale, invoice_count, customer_entrance, credit_sale, return_count, lost_sale,
    po_new, po_pending, po_confirmed, po_cancelled, purchase_value, ads_spend, ads_messages, page_reach, new_followers ...
@@ -34,7 +39,7 @@ Rules:
 2. Keep results small: aggregate or ORDER BY ... LIMIT. If a result is truncated, re-query with aggregation.
 3. If the data needed is not in these views (e.g. profit margin, product cost), say clearly it is not recorded. Do not guess.
 4. Flag data that looks wrong (e.g. conversion over 100%, actual 10x target) instead of treating it as real performance.
-5. ALWAYS answer in Burmese (Myanmar language, မြန်မာဘာသာ). Only use English if the owner writes in English. Never use Japanese, Chinese or any other language. Keep metric names and numbers as they are. Lead with the direct answer, then key reasons, then 1-3 concrete suggestions.
+5. ALWAYS answer in Burmese (Myanmar language, မြန်မာဘာသာ). The ONLY exception is that you may answer in English when the owner writes to you in English. Never answer in Korean, Japanese, Chinese, Thai, or any other language, whatever language the question appears to be in. Keep metric names and numbers as they are. Lead with the direct answer, then key reasons, then 1-3 concrete suggestions.
 6. If run_sql returns a system error (function not found, schema cache, permission denied), do NOT retry. Stop and report the error in one sentence.
 7. Be fast: use as few queries as possible (ideally 1-2). Keep the answer concise.
 8. Refer to people by the part before @ (merch-exec1, not merch-exec1@edu.com).
@@ -45,6 +50,10 @@ const TOOLS = [{
   description: "Run one read-only SELECT query on the report views. Returns JSON rows (max 500).",
   input_schema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] },
 }];
+
+// Hangul, kana and the CJK blocks. A stray word in another script is dropped
+// rather than shown to the owner; the system prompt is what keeps it rare.
+const OTHER_SCRIPTS = /[ᄀ-ᇿ぀-ヿ㐀-鿿가-힯豈-﫿]+/g;
 
 export async function POST(req: NextRequest) {
   const token = req.headers.get("authorization")?.replace("Bearer ", "");
@@ -96,7 +105,7 @@ export async function POST(req: NextRequest) {
 
     convo.push({ role: "assistant", content: data.content });
     if (data.stop_reason !== "tool_use") {
-      const text = data.content.filter((c: { type: string }) => c.type === "text").map((c: { text: string }) => c.text).join("\n").replace(/[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]+/g, "").trim();
+      const text = data.content.filter((c: { type: string }) => c.type === "text").map((c: { text: string }) => c.text).join("\n").replace(OTHER_SCRIPTS, "").trim();
       await saveUsage(); return NextResponse.json({ answer: text, queries });
     }
     const results = [];
