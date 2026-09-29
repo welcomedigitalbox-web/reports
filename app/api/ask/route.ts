@@ -26,6 +26,18 @@ Views (PostgreSQL, read-only):
 - ai_people(email, role, department, store, reports_to)
 
 Live business data (POS and finance, read-only):
+- ai_daily(day, store_id, store, sales_amount, invoices, gross_profit, discount, units_sold,
+  online_amount, online_invoices, returns_amount, returns_count, target, reported_sale,
+  reported_invoices, customers_in, lost_sale, credit_sale, achievement_pct, reported_gap_pct,
+  report_filed)
+   One row per shop per day. sales_amount/gross_profit come from the till; target, reported_sale
+   and customers_in come from what the shop wrote in its daily report. reported_gap_pct is how
+   far the reported figure sits from the till, so a large value means the report is wrong, not
+   that the shop performed differently. THIS IS THE VIEW TO TRY FIRST.
+   The POS is not yet in daily use. sales_amount, invoices and gross_profit from the till are
+   near zero while the shops still write their figures into the daily report, so reported_sale is
+   the real figure for now. Never report a 0% achievement as poor selling: say the sale was not
+   entered into the POS, and compare against reported_sale instead.
 - ai_sales(id, sale_ref, store_id, cashier, cashier_email, total, subtotal, discount_amount,
   vat_amount, payment_method, customer_id, customer_name, order_type, order_status, channel,
   sale_rep_name, balance_due, due_date, created_at)
@@ -83,7 +95,18 @@ Rules:
 4. Flag data that looks wrong (e.g. conversion over 100%, actual 10x target) instead of treating it as real performance.
 5. ALWAYS answer in Burmese (Myanmar language, မြန်မာဘာသာ). The ONLY exception is that you may answer in English when the owner writes to you in English. Never answer in Korean, Japanese, Chinese, Thai, or any other language, whatever language the question appears to be in. Keep metric names and numbers as they are. Lead with the direct answer, then key reasons, then 1-3 concrete suggestions.
 6. If run_sql returns a system error (function not found, schema cache, permission denied), do NOT retry. Stop and report the error in one sentence.
-7. Be fast: use as few queries as possible (ideally 1-2). Keep the answer concise.
+7. Be fast: use as few queries as possible (ideally 1-2), and never more than 4 in total. Keep the answer concise.
+10. Do not run near-identical searches over and over. If two attempts return nothing, stop
+    searching and answer with what you have, saying plainly which figure is not recorded and
+    where it would have to be entered. A thin answer beats no answer.
+11. START with ai_daily. Sales, invoices, gross profit, discount, returns, target,
+    achievement and whether the report was filed are all there, one row per shop per day,
+    so most questions need one short query and no joins. Go to the other views only for
+    something ai_daily does not carry (a product, a supplier, a customer, an account).
+12. Marketing does not record a spend figure by name. Its numbers are KPI rows: the KPI's
+    name is in ai_texts (field 'kpi') and its value in ai_metrics (metric 'this_period',
+    'last_period', 'target'), matched on submission_id and row_no. If the owner asks for
+    advertising spend, look there once; if it is not written, say it is not recorded.
 8. Refer to people by the part before @ (merch-exec1, not merch-exec1@edu.com).
 9. End with a short "ရင်းမြစ်:" line in Burmese listing only dates, departments and stores (never view, table or column names) naming dates/stores/departments used.`;
 
@@ -128,7 +151,7 @@ export async function POST(req: NextRequest) {
       cost_usd: cost,
     }).then(({ error }) => { if (error) console.error("ai_usage insert:", error.message); });
   }
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 4; i++) {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -163,6 +186,37 @@ export async function POST(req: NextRequest) {
     }
     convo.push({ role: "user", content: results });
   }
+  // Out of tool rounds. Rather than hand back a blank apology, ask once more
+  // with the tools removed so the model answers from what it already found.
+  const last = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": process.env.ANTHROPIC_API_KEY!,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model, max_tokens: 1500,
+      system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
+      messages: [...convo, {
+        role: "user",
+        content: "မရှာတွေ့တာတွေ ထပ်မရှာတော့ဘဲ၊ ခုအထိ ရထားတဲ့ ဒေတာနဲ့ပဲ ဖြေပါ။ " +
+                 "ဘယ်ကိန်းဂဏန်းက စနစ်ထဲ မှတ်ထားခြင်း မရှိလဲ၊ ဘယ်နေရာမှာ ဖြည့်ရမလဲ ပြောပါ။",
+      }],
+    }),
+  });
+  const lastData = await last.json();
+  if (lastData?.usage) {
+    u.inp += lastData.usage.input_tokens || 0; u.out += lastData.usage.output_tokens || 0;
+    u.cr += lastData.usage.cache_read_input_tokens || 0; u.cw += lastData.usage.cache_creation_input_tokens || 0;
+  }
+  const lastText = Array.isArray(lastData?.content)
+    ? lastData.content.filter((c: { type: string }) => c.type === "text")
+        .map((c: { text: string }) => c.text).join("\n").replace(OTHER_SCRIPTS, "").trim()
+    : "";
   await saveUsage();
-  return NextResponse.json({ answer: "မေးခွန်းက ရှုပ်လွန်းလို့ ပိုတိတိကျကျ ပြန်မေးပေးပါ။", queries });
+  return NextResponse.json({
+    answer: lastText || "မေးခွန်းက ရှုပ်လွန်းလို့ ပိုတိတိကျကျ ပြန်မေးပေးပါ။",
+    queries,
+  });
 }
