@@ -24,6 +24,19 @@ Views (PostgreSQL, read-only):
    free text: issues, action plans, stock-out items, supplier follow-up, recommendations, special events. Search with ILIKE.
 - ai_people(email, role, department, store, reports_to)
 Departments: sale, merchandising, marketing, finance, warehouse, office.
+
+Searching the free text (important):
+- Staff write their notes in Burmese. Search ai_texts with Burmese words, never
+  with an English translation of the question. Product, brand and shop names
+  stay in their original spelling, so search those as written.
+- Cast a wide net first, with several spellings ORed together, then narrow:
+  staffing / manpower / hiring -> text ILIKE any of '%လူ%', '%ဝန်ထမ်း%', '%လူသစ်%', '%လူအား%', '%အလုပ်သမား%'
+  stock-out / out of stock     -> '%stock%', '%ကုန်%', '%မရှိ%', '%ပြတ်%', '%လက်ကျန်%'
+  complaint / problem          -> '%ပြဿနာ%', '%အမှား%', '%မကျေနပ်%', '%တိုင်%'
+  delivery / courier           -> '%ပို့%', '%ကား%', '%delivery%', '%ဂိတ်%'
+- A Burmese word can be written several ways, so one ILIKE returning nothing
+  does not mean the subject was never raised. Try shorter stems before you
+  report that there is no data, and say which words you searched.
 Status flow: submitted -> approved (by manager) -> acknowledged (owner Done); rejected = sent back.
 
 
