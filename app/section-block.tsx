@@ -277,18 +277,12 @@ function Field({
         </select>
       );
 
+    case "image":
+    case "photo":
     case "file":
-      // Uploads are not wired up yet; a link to wherever the evidence
-      // lives is more useful than a box that does nothing.
       return (
-        <input
-          type="url"
-          placeholder="https://…"
-          className={base}
-          value={String(v)}
-          disabled={readOnly}
-          onChange={(e) => onChange(e.target.value)}
-        />
+        <FileField value={String(v)} readOnly={readOnly} onChange={onChange}
+                   image={field.field_type !== "file"} />
       );
 
     default:
@@ -302,6 +296,86 @@ function Field({
         />
       );
   }
+}
+
+// A photo of a new product says more than a line of description, so the box
+// takes the picture itself instead of asking for a link to one. The file goes
+// to a private bucket and the answer keeps its path; the picture is fetched
+// with a signed link each time it is shown.
+function FileField({
+  value, readOnly, onChange, image,
+}: {
+  value: string;
+  readOnly?: boolean;
+  onChange: (v: string) => void;
+  image: boolean;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [url, setUrl] = useState<string>("");
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    if (!value || value.startsWith("http")) {
+      setUrl(value);
+      return;
+    }
+    supabase.storage.from("report-photos").createSignedUrl(value, 3600)
+      .then(({ data }) => { if (alive) setUrl(data?.signedUrl || ""); });
+    return () => { alive = false; };
+  }, [value]);
+
+  async function upload(file: File) {
+    setErr("");
+    // A phone camera file is several megabytes; anything past ten is a
+    // mistake rather than a photo.
+    if (file.size > 10 * 1024 * 1024) {
+      setErr("file is larger than 10MB");
+      return;
+    }
+    setBusy(true);
+    const ext = file.name.split(".").pop() || "jpg";
+    const path = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${ext}`;
+    const { error } = await supabase.storage.from("report-photos").upload(path, file);
+    setBusy(false);
+    if (error) { setErr(error.message); return; }
+    onChange(path);
+  }
+
+  if (readOnly) {
+    if (!url) return <span className="text-sm text-slate-400">-</span>;
+    return image ? (
+      // eslint-disable-next-line @next/next/no-img-element
+      <a href={url} target="_blank" rel="noreferrer">
+        <img src={url} alt="" className="h-24 rounded-lg border border-slate-200 object-cover" />
+      </a>
+    ) : (
+      <a href={url} target="_blank" rel="noreferrer" className="text-sm text-blue-600">open</a>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {url && image && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={url} alt="" className="h-24 rounded-lg border border-slate-200 object-cover" />
+      )}
+      <div className="flex items-center gap-2">
+        <input
+          type="file"
+          accept={image ? "image/*" : undefined}
+          className="text-sm"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }}
+        />
+        {busy && <span className="text-xs text-slate-400">…</span>}
+        {value && !busy && (
+          <button type="button" onClick={() => onChange("")}
+                  className="text-xs text-red-600">remove</button>
+        )}
+      </div>
+      {err && <p className="text-xs text-red-600">{err}</p>}
+    </div>
+  );
 }
 
 export default function SectionBlock({

@@ -44,8 +44,14 @@ export default function HomePage() {
       ? await q
       : await q.eq("department", profile.department);
 
+    // A form can be addressed to particular people as well as to roles —
+    // two staff on the same role each file their own report, and a role list
+    // cannot tell them apart.
     const forRole = ((f as ReportForm[]) || []).filter((x) => {
-      const roles = (x as ReportForm & { allowed_roles?: string[] }).allowed_roles;
+      const y = x as ReportForm & { allowed_roles?: string[]; allowed_emails?: string[] };
+      const emails = y.allowed_emails;
+      if (emails?.length) return emails.includes(profile!.email);
+      const roles = y.allowed_roles;
       return !roles?.length || roles.includes(profile!.role);
     });
 
