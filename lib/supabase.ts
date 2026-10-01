@@ -41,7 +41,8 @@ export type Profile = {
 
 export type FieldType =
   | "text" | "textarea" | "number" | "money" | "percent"
-  | "date" | "select" | "yesno" | "user" | "store" | "file" | "time";
+  | "date" | "select" | "yesno" | "user" | "store" | "file" | "time"
+  | "image" | "photo";
 
 export type FormField = {
   id: string;
