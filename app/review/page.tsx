@@ -29,6 +29,14 @@ export default function ReviewPage() {
   const [dept, setDept] = useState("");
   const [loading, setLoading] = useState(true);
 
+  // The archive is IT's to undo, so it is fetched, shown and restored only
+  // for that one account.
+  const isItAdmin = profile?.email === "itadmin@edu.com";
+  const [archived, setArchived] = useState<Submission[]>([]);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [restoring, setRestoring] = useState(false);
+  const [msg, setMsg] = useState("");
+
   useEffect(() => {
     if (profile) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -46,6 +54,10 @@ export default function ReviewPage() {
     ]);
     setRows((s as Submission[]) || []);
     setForms((f as ReportForm[]) || []);
+    if (profile?.email === "itadmin@edu.com") {
+      const { data: a } = await supabase.rpc("report_archived");
+      setArchived((a as Submission[]) || []);
+    }
     setLoading(false);
   }
 
@@ -102,6 +114,32 @@ export default function ReviewPage() {
     return out;
   }, [rows, tab, profile?.role, mgrEmails, officeForms, from, to, who, dept, formDept]);
 
+  function toggle(id: string) {
+    setPicked((p) => {
+      const next = new Set(p);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function restore() {
+    if (picked.size === 0) return;
+    setRestoring(true);
+    const { data, error } = await supabase.rpc("report_unarchive", {
+      p_ids: Array.from(picked),
+    });
+    setRestoring(false);
+    if (error) {
+      setMsg("❌ " + error.message);
+      return;
+    }
+    setMsg(`${data} report(s) back to draft`);
+    setPicked(new Set());
+    await load();
+    setTimeout(() => setMsg(""), 4000);
+  }
+
   const people = useMemo(() => {
     const set = new Set(rows.map((r) => String(r.created_by)).filter(Boolean));
     return Array.from(set).sort();
@@ -134,8 +172,11 @@ export default function ReviewPage() {
         What your department has filed
       </p>
 
-      <div className="flex gap-1 mb-4">
-        {TABS.map((t) => (
+      <div className="flex gap-1 mb-4 flex-wrap">
+        {(isItAdmin
+          ? [...TABS, { key: "archived" as SubmissionStatus, label: "Archived" }]
+          : TABS
+        ).map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
@@ -144,8 +185,10 @@ export default function ReviewPage() {
             }`}
           >
             {t.label}
-            {counts[t.key] > 0 && (
-              <span className="ml-1 text-xs">({counts[t.key]})</span>
+            {(t.key === "archived" ? archived.length : counts[t.key]) > 0 && (
+              <span className="ml-1 text-xs">
+                ({t.key === "archived" ? archived.length : counts[t.key]})
+              </span>
             )}
           </button>
         ))}
@@ -180,6 +223,46 @@ export default function ReviewPage() {
         <span className="text-xs text-slate-400 ml-auto">{visible.length}</span>
       </div>
 
+      {tab === "archived" && isItAdmin && (
+        <div className="bg-white border border-slate-200 rounded-xl">
+          <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100">
+            <span className="text-sm text-slate-500">
+              {picked.size > 0 ? `${picked.size} selected` : "Pick the reports to reopen"}
+            </span>
+            {msg && <span className="text-xs text-slate-500">{msg}</span>}
+            <button
+              onClick={restore}
+              disabled={picked.size === 0 || restoring}
+              className="ml-auto px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 disabled:bg-slate-200 disabled:text-slate-400 text-white"
+            >
+              {restoring ? "…" : "Back to draft"}
+            </button>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {archived.map((a) => {
+              const form = forms.find((f) => f.id === a.form_id);
+              return (
+                <label key={a.id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer">
+                  <input type="checkbox" checked={picked.has(a.id)} onChange={() => toggle(a.id)} />
+                  <FileText size={16} className="text-slate-400 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-sm truncate">{form?.name || a.form_id}</div>
+                    <div className="text-xs text-slate-400">
+                      {a.report_date} · {a.created_by}
+                      {a.store_id && ` · ${a.store_id}`}
+                    </div>
+                  </div>
+                </label>
+              );
+            })}
+            {archived.length === 0 && (
+              <p className="text-sm text-slate-400 py-12 text-center">Nothing archived</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab !== "archived" && (
       <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
         {visible.map((s) => {
           const form = forms.find((f) => f.id === s.form_id);
@@ -209,6 +292,7 @@ export default function ReviewPage() {
           <p className="text-sm text-slate-400 py-12 text-center">Nothing here</p>
         )}
       </div>
+      )}
     </div>
   );
 }
