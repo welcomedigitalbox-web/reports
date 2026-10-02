@@ -11,10 +11,19 @@ export default function Header() {
   const pathname = usePathname();
   const { profile, signOut } = useAuth();
   const [hasReports, setHasReports] = useStateHR(false);
+  // How many issues other departments have left for this person, unanswered.
+  const [openIssues, setOpenIssues] = useStateHR(0);
   useEffectHR(() => {
     if (!profile?.id) return;
     sbHR.rpc("my_direct_report_count").then(({ data }) => setHasReports(Number(data || 0) > 0));
   }, [profile?.id]);
+
+  // Re-read on every page change: the count is stale the moment someone marks
+  // one done, and a badge that lies is worse than no badge.
+  useEffectHR(() => {
+    if (!profile?.id) return;
+    sbHR.rpc("my_open_issue_count").then(({ data }) => setOpenIssues(Number(data || 0)));
+  }, [profile?.id, pathname]);
 
   if (!profile || pathname === "/login") return null;
 
@@ -65,7 +74,14 @@ export default function Header() {
                 : "border-transparent text-slate-500 hover:text-slate-700"
             }`}
           >
-            {t.label}
+            <span className="inline-flex items-center gap-1.5">
+              {t.label}
+              {t.href === "/issues" && openIssues > 0 && (
+                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[11px] font-semibold leading-none">
+                  {openIssues > 99 ? "99+" : openIssues}
+                </span>
+              )}
+            </span>
           </Link>
         ))}
       </nav>
