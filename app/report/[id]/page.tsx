@@ -95,6 +95,7 @@ export default function ReportPage() {
   const [incUrgency, setIncUrgency] = useState("normal");
   const [incDepts, setIncDepts] = useState<string[]>([]);
   const [myPartFiled, setMyPartFiled] = useState(false);
+  const [newDate, setNewDate] = useState("");
 
   useEffect(() => {
     if (id) load();
@@ -293,6 +294,32 @@ export default function ReportPage() {
           {sub.status.replace("_", " ")}
         </span>
       </div>
+
+      {profile?.email === "itadmin@edu.com" && (
+        <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 mb-4 flex flex-wrap items-center gap-3">
+          <span className="text-sm text-slate-600">Report date</span>
+          <input
+            type="date"
+            defaultValue={String(sub.report_date)}
+            max={new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Yangon" })}
+            onChange={(e) => setNewDate(e.target.value)}
+            className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm bg-white"
+          />
+          <button
+            disabled={busy || !newDate || newDate === String(sub.report_date)}
+            onClick={() => run(
+              () => supabase.rpc("report_set_date", { p_submission_id: id, p_date: newDate }),
+              "Date changed"
+            )}
+            className="px-4 py-1.5 rounded-lg text-sm font-medium bg-slate-900 disabled:bg-slate-200 disabled:text-slate-400 text-white"
+          >
+            Move
+          </button>
+          <span className="text-xs text-slate-400">
+            IT only. The change is kept in the report's history.
+          </span>
+        </div>
+      )}
 
       {sub.reject_reason && sub.status === "rejected" && (
         <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4">
