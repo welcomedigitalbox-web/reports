@@ -436,6 +436,12 @@ export default function SectionBlock({
     : "";
   const canPull = !!sectionKind;
   const compactTable = /kpi tracker/i.test(section.title || "");
+  // A checklist that is the same every day — every shop against the same few
+  // things — belongs in a grid, not in rows the person has to add one at a
+  // time. The title says so, and the first column's options say which rows.
+  const gridTable =
+    section.is_table && /\bgrid\b|status check|ဇယား/i.test(section.title || "");
+  const rowSeed = gridTable ? section.fields[0] : undefined;
   const facebookSection = /facebook/i.test(section.title || "");
   // How far back the comparison looks, in days.
   function backDays(label: string) {
@@ -561,6 +567,17 @@ export default function SectionBlock({
       status: verdict(now, target, good, lower) || r.status || "",
     };
   }
+
+  // Lay the grid out the moment it is opened, so the first thing on screen is
+  // the list of places to check rather than an empty box and an Add button.
+  useEffect(() => {
+    if (!gridTable || readOnly) return;
+    if (rows.length > 0) return;
+    const opts = (rowSeed?.options || []) as string[];
+    if (!rowSeed || !opts.length) return;
+    onChange(section.id, opts.map((o) => ({ [rowSeed.key]: o })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gridTable, readOnly, rows.length]);
 
   function setRow(i: number, key: string, value: unknown) {
     const next = rows.map((r, idx) =>
@@ -691,7 +708,7 @@ export default function SectionBlock({
         )}
       </div>
 
-      {section.is_table && compactTable ? (
+      {section.is_table && (compactTable || gridTable) ? (
         <div className="p-4 overflow-x-auto">
           {rows.length === 0 && (
             <p className="text-sm text-slate-400 mb-3">No rows yet</p>
@@ -703,25 +720,31 @@ export default function SectionBlock({
                   {section.fields.map((f) => (
                     <th key={f.id} className="py-2 pr-2 font-normal whitespace-nowrap">{f.label}</th>
                   ))}
-                  {!readOnly && <th className="w-8" />}
+                  {!readOnly && !gridTable && <th className="w-8" />}
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row, i) => (
                   <tr key={i} className="border-b border-slate-100 last:border-0 align-top">
-                    {section.fields.map((f) => (
+                    {section.fields.map((f, fi) => (
                       <td key={f.id} className="py-1.5 pr-2 min-w-[7rem]">
-                        <Field
-                          field={f}
-                          value={row[f.key]}
-                          onChange={(v) => setRow(i, f.key, v)}
-                          readOnly={readOnly || COMPUTED.has(f.key)}
-                          stores={stores}
-                          people={people}
-                        />
+                        {gridTable && fi === 0 ? (
+                          <span className="whitespace-nowrap font-medium text-slate-700">
+                            {String(row[f.key] ?? "")}
+                          </span>
+                        ) : (
+                          <Field
+                            field={f}
+                            value={row[f.key]}
+                            onChange={(v) => setRow(i, f.key, v)}
+                            readOnly={readOnly || COMPUTED.has(f.key)}
+                            stores={stores}
+                            people={people}
+                          />
+                        )}
                       </td>
                     ))}
-                    {!readOnly && (
+                    {!readOnly && !gridTable && (
                       <td className="py-1.5">
                         <button
                           type="button"
@@ -737,7 +760,7 @@ export default function SectionBlock({
               </tbody>
             </table>
           )}
-          {!readOnly && (
+          {!readOnly && !gridTable && (
             <button
               type="button"
               onClick={() => onChange(section.id, [...rows, {}])}
