@@ -27,7 +27,7 @@ export default function DashboardPage() {
   // Which departments have not reported is worth knowing and not worth a
   // paragraph across the top of the screen every morning.
   const [showMissing, setShowMissing] = useState(false);
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Yangon" }));
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState("");

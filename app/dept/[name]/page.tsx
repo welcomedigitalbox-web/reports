@@ -25,7 +25,15 @@ export default function DeptPage() {
   const { name } = useParams<{ name: string }>();
   const router = useRouter();
   const { profile, loading: authLoading } = useAuth();
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  // The day comes from the dashboard that linked here, so clicking a
+  // department does not quietly jump the reader back to today.
+  const [date, setDate] = useState(() => {
+    const fromLink =
+      typeof window === "undefined"
+        ? null
+        : new URLSearchParams(window.location.search).get("date");
+    return fromLink || new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Yangon" });
+  });
   const [forms, setForms] = useState<ReportForm[]>([]);
   const [subs, setSubs] = useState<Submission[]>([]);
   const [people, setPeople] = useState<P[]>([]);

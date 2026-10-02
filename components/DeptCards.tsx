@@ -35,7 +35,7 @@ export default function DeptCards({ date }: { date: string }) {
         const tone = e.filed === 0 ? "border-slate-200 text-slate-400"
           : e.waiting > 0 ? "border-amber-300" : "border-green-300";
         return (
-          <button key={d} onClick={() => router.push(`/dept/${d}`)}
+          <button key={d} onClick={() => router.push(`/dept/${d}?date=${date}`)}
             className={`bg-white border-2 rounded-xl p-4 text-left hover:shadow-sm ${tone}`}>
             <div className="font-semibold capitalize">{d}</div>
             <div className="text-xs mt-1">
