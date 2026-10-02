@@ -24,3 +24,13 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Printing an answer: the chat furniture is not part of what the owner wants
+   on paper, and a page break through the middle of a table is unreadable. */
+@media print {
+  header, nav, aside, button, input, details { display: none !important; }
+  body { background: #fff; }
+  main, div { overflow: visible !important; }
+  table { page-break-inside: avoid; }
+  tr, li { page-break-inside: avoid; }
+}

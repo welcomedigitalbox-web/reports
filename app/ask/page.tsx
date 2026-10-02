@@ -1,9 +1,19 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
+import Answer from "./answer";
+import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabase";
 import { useAuth, isDirector } from "../auth-context";
 
-type Msg = { role: "user" | "assistant"; content: string; queries?: string[] };
+type Table = { query: string; rows: Record<string, unknown>[] };
+type Msg = {
+  role: "user" | "assistant";
+  content: string;
+  queries?: string[];
+  // Only for the answers given in this sitting: the figures behind them, so
+  // they can be taken away as a spreadsheet.
+  tables?: Table[];
+};
 type Chat = { id: string; title: string | null; updated_at: string };
 const SAMPLES = [
   "ဒီနေ့ ဘယ်ဌာနမှာ ပြဿနာအများဆုံးလဲ",
@@ -79,6 +89,7 @@ export default function AskPage() {
       let buf = "";
       let text = "";
       const qs: string[] = [];
+      const tables: Table[] = [];
 
       for (;;) {
         const { done, value } = await reader.read();
@@ -88,7 +99,10 @@ export default function AskPage() {
         buf = lines.pop() || "";
         for (const line of lines) {
           if (!line.trim()) continue;
-          let ev: { type: string; text?: string; query?: string; error?: string; queries?: string[] };
+          let ev: {
+            type: string; text?: string; query?: string; error?: string;
+            queries?: string[]; rows?: Record<string, unknown>[];
+          };
           try { ev = JSON.parse(line); } catch { continue; }
 
           if (ev.type === "delta") {
@@ -98,12 +112,18 @@ export default function AskPage() {
             if (!text) text = ev.text || "…";
           } else if (ev.type === "query") {
             if (ev.query) qs.push(ev.query);
+          } else if (ev.type === "rows") {
+            if (ev.rows?.length) tables.push({ query: ev.query || "", rows: ev.rows });
           } else if (ev.type === "error") {
             text += `\n\nError: ${ev.error}`;
           } else if (ev.type === "done") {
             if (ev.queries) qs.splice(0, qs.length, ...ev.queries);
           }
-          reply = { role: "assistant", content: text, queries: qs.length ? [...qs] : undefined };
+          reply = {
+            role: "assistant", content: text,
+            queries: qs.length ? [...qs] : undefined,
+            tables: tables.length ? [...tables] : undefined,
+          };
           setMsgs([...next, reply]);
         }
       }
@@ -118,6 +138,29 @@ export default function AskPage() {
     }
     setBusy(false);
     loadChats();
+  }
+
+  // Taking the answer away: the words to paste into a message, the figures to
+  // open in Excel, the whole thing on paper. Printing is the browser's job, so
+  // the PDF button simply asks for it.
+  function copyAnswer(m: Msg) {
+    navigator.clipboard?.writeText(m.content);
+  }
+
+  function toExcel(m: Msg) {
+    if (!m.tables?.length) return;
+    const wb = XLSX.utils.book_new();
+    m.tables.forEach((t, i) => {
+      const ws = XLSX.utils.json_to_sheet(t.rows);
+      XLSX.utils.book_append_sheet(wb, ws, `Data ${i + 1}`);
+    });
+    // The question itself, so a file found later still says what it answered.
+    const note = XLSX.utils.aoa_to_sheet([
+      ["Question"], [msgs[msgs.indexOf(m) - 1]?.content || ""],
+      [], ["Answer"], ...m.content.split("\n").map((l) => [l]),
+    ]);
+    XLSX.utils.book_append_sheet(wb, note, "Answer");
+    XLSX.writeFile(wb, `ask-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
   if (loading) return null;
@@ -155,7 +198,7 @@ export default function AskPage() {
         </div>
       )}
 
-      <div className="flex-1 flex flex-col min-w-0 max-w-3xl">
+      <div className="flex-1 flex flex-col min-w-0 max-w-3xl mx-auto w-full">
         <div className="flex items-center gap-2 mb-3">
           <button onClick={() => setShowSide(true)} className="md:hidden text-sm border rounded-lg px-2 py-1">☰</button>
           <h1 className="text-xl font-semibold">Ask</h1>
@@ -177,10 +220,25 @@ export default function AskPage() {
             <div key={i} className={m.role === "user" ? "flex justify-end" : ""}>
               <div className={m.role === "user"
                 ? "bg-blue-600 text-white rounded-2xl px-4 py-2 max-w-[85%] text-sm"
-                : "bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap"}>
-                {m.content}
+                : "bg-white border border-slate-200 rounded-2xl px-5 py-4"}>
+                {m.role === "user" ? m.content : <Answer text={m.content} />}
+                {m.role === "assistant" && m.content && (
+                  <div className="flex flex-wrap gap-3 mt-4 pt-3 border-t border-slate-100 text-xs print:hidden">
+                    <button onClick={() => copyAnswer(m)} className="text-slate-500 hover:text-slate-700">
+                      Copy
+                    </button>
+                    {m.tables && m.tables.length > 0 && (
+                      <button onClick={() => toExcel(m)} className="text-slate-500 hover:text-slate-700">
+                        Excel
+                      </button>
+                    )}
+                    <button onClick={() => window.print()} className="text-slate-500 hover:text-slate-700">
+                      PDF / Print
+                    </button>
+                  </div>
+                )}
                 {m.queries && m.queries.length > 0 && (
-                  <details className="mt-2 text-xs text-slate-400">
+                  <details className="mt-2 text-xs text-slate-400 print:hidden">
                     <summary className="cursor-pointer">Data query {m.queries.length} ခု ကြည့်ရန်</summary>
                     {m.queries.map((q, k) => <pre key={k} className="mt-1 p-2 bg-slate-50 rounded overflow-x-auto">{q}</pre>)}
                   </details>
@@ -188,7 +246,12 @@ export default function AskPage() {
               </div>
             </div>
           ))}
-          {busy && <div className="text-sm text-slate-400">Data ခွဲခြမ်းနေပါတယ်…</div>}
+          {busy && (
+            <div className="flex items-center gap-2 text-sm text-slate-400">
+              <span className="inline-block w-2 h-2 rounded-full bg-slate-300 animate-pulse" />
+              Data ခွဲခြမ်းနေပါတယ်…
+            </div>
+          )}
           <div ref={end} />
         </div>
 

@@ -323,6 +323,12 @@ export async function POST(req: NextRequest) {
             queries.push(q);
             send({ type: "query", query: q });
             const { data: rows, error } = await sb.rpc("ai_run_sql", { p_query: q });
+            // The rows go to the reader as well as to the model, so the owner
+            // can take the same figures away as a spreadsheet instead of
+            // retyping them out of the answer.
+            if (!error && Array.isArray(rows) && rows.length) {
+              send({ type: "rows", query: q, rows: rows.slice(0, 500) });
+            }
             results.push({
               type: "tool_result", tool_use_id: b.id,
               content: JSON.stringify(error ? { error: error.message } : rows).slice(0, 60000),
