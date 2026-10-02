@@ -30,7 +30,7 @@ export default function InboxPage() {
   }
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [filter]);
 
-  const sections = useMemo(() => Array.from(new Set(rows.map((r) => r.section))), [rows]);
+  const departments = useMemo(() => Array.from(new Set(rows.map((r) => r.section))), [rows]);
   const shown = section ? rows.filter((r) => r.section === section) : rows;
 
   async function mark(r: Item, status: string) {
@@ -56,8 +56,8 @@ export default function InboxPage() {
         ))}
         <select value={section} onChange={(e) => setSection(e.target.value)}
           className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm">
-          <option value="">All sections</option>
-          {sections.map((s) => <option key={s} value={s}>{s}</option>)}
+          <option value="">All departments</option>
+          {departments.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
       </div>
 
