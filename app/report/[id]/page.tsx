@@ -486,7 +486,7 @@ export default function ReportPage() {
             </button>
           )}
 
-          {mine && ["approved", "acknowledged"].includes(sub.status) && (
+          {mine && ["submitted", "approved", "acknowledged"].includes(sub.status) && (
             <button
               onClick={() => setPrompt({ kind: "edit", label: "What needs changing?" })}
               disabled={busy}
