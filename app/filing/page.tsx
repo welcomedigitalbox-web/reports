@@ -13,6 +13,7 @@ type Row = {
   department: string;
   form_id: string;
   form_name: string;
+  cadence: string;
   is_shared: boolean;
   day: string;
   filed: boolean;
@@ -64,13 +65,13 @@ export default function FilingPage() {
   // One line per person per form: two forms missed on the same day are two
   // reports missing, not one bad day.
   const lines = useMemo(() => {
-    const m = new Map<string, { email: string; department: string; form: string; shared: boolean; byDay: Map<string, Row> }>();
+    const m = new Map<string, { email: string; department: string; form: string; shared: boolean; cadence: string; byDay: Map<string, Row> }>();
     for (const r of rows) {
       if (dept && r.department !== dept) continue;
       const k = `${r.email}|${r.form_id}`;
       const e = m.get(k) || {
         email: r.email, department: r.department, form: r.form_name,
-        shared: r.is_shared, byDay: new Map<string, Row>(),
+        shared: r.is_shared, cadence: r.cadence, byDay: new Map<string, Row>(),
       };
       e.byDay.set(r.day, r);
       m.set(k, e);
@@ -159,6 +160,11 @@ export default function FilingPage() {
                         shared
                       </span>
                     )}
+                    {l.cadence === "weekly" && (
+                      <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">
+                        weekly
+                      </span>
+                    )}
                   </td>
                   {days.map((d) => {
                     const r = l.byDay.get(d);
@@ -200,7 +206,8 @@ export default function FilingPage() {
       <p className="text-xs text-slate-400 mt-3">
         Green filed · amber not filed. Hover a square for the time it was filed. Yangon time.
         A report marked <b>shared</b> is one the team fills in together — each person
-        counts as having filed once they have added their own part.
+        counts as having filed once they have added their own part. A <b>weekly</b>
+        report covers its whole week, so one filing turns the whole week green.
       </p>
     </div>
   );

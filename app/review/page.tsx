@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FileText } from "lucide-react";
 import {
-  supabase, STATUS_TONE,
+  supabase, STATUS_TONE, yangon,
   type ReportForm, type Submission, type SubmissionStatus,
 } from "@/lib/supabase";
 import { useAuth, isManagerTier, isDirector } from "../auth-context";
@@ -145,10 +145,17 @@ export default function ReviewPage() {
     return Array.from(set).sort();
   }, [rows]);
 
+  // The number on a tab counts what that tab would actually show with the
+  // filters as they are. A count that ignores them sends people clicking into
+  // an empty list.
   const counts = useMemo(() => {
-    const rows2 = isDirector(profile?.role)
+    let rows2 = isDirector(profile?.role)
       ? rows.filter((r) => r.status !== "submitted" || mgrEmails.has(String(r.created_by)) || officeForms.has(r.form_id))
       : rows;
+    if (from) rows2 = rows2.filter((r) => String(r.report_date) >= from);
+    if (to) rows2 = rows2.filter((r) => String(r.report_date) <= to);
+    if (who) rows2 = rows2.filter((r) => String(r.created_by) === who);
+    if (dept) rows2 = rows2.filter((r) => String(formDept.get(r.form_id) || "") === dept);
     const waiting = rows2.filter((r) =>
       ["submitted", "cancel_requested", "edit_requested"].includes(r.status)
     ).length;
@@ -158,7 +165,7 @@ export default function ReviewPage() {
       rejected: rows2.filter((r) => r.status === "rejected").length,
       all: rows2.length,
     } as Record<string, number>;
-  }, [rows, profile?.role, mgrEmails, officeForms]);
+  }, [rows, profile?.role, mgrEmails, officeForms, from, to, who, dept, formDept]);
 
   if (authLoading || loading) {
     return <div className="pt-16 text-center text-sm text-slate-400">…</div>;
@@ -279,6 +286,11 @@ export default function ReviewPage() {
                   <div className="text-xs text-slate-400">
                     {s.report_date} · {s.created_by}
                     {s.store_id && ` · ${s.store_id}`}
+                  </div>
+                  <div className="text-xs text-slate-300">
+                    {s.submitted_at ? `filed ${yangon(s.submitted_at)}` : `started ${yangon(s.created_at)}`}
+                    {s.updated_at && s.updated_at !== s.submitted_at &&
+                      ` · edited ${yangon(s.updated_at)}`}
                   </div>
                 </div>
               </div>
