@@ -160,12 +160,19 @@ export async function POST(req: NextRequest) {
   // Set AI_MODEL in the environment to change this. The analysis is worth a
   // stronger model than the chat it grew out of.
   const model = process.env.AI_MODEL || "claude-sonnet-5";
-  // Room to think the question through before the first query. This is what
-  // the owner means by wanting it to reason like the chat does.
-  const thinkBudget = Number(process.env.AI_THINKING_BUDGET || 4000);
-  const thinking = thinkBudget > 0
-    ? { type: "enabled" as const, budget_tokens: thinkBudget }
-    : undefined;
+  // Room to think the question through before the first query. Newer models
+  // decide how long to think for themselves and take an effort level instead
+  // of a token budget; older ones take the budget. AI_THINKING_BUDGET=0 turns
+  // thinking off either way.
+  const thinkBudget = Number(process.env.AI_THINKING_BUDGET ?? 4000);
+  const effort = process.env.AI_EFFORT || "high";
+  const adaptive = (process.env.AI_THINKING_MODE || "adaptive") === "adaptive";
+  const thinking = thinkBudget <= 0
+    ? undefined
+    : adaptive
+      ? { type: "adaptive" as const }
+      : { type: "enabled" as const, budget_tokens: thinkBudget };
+  const outputConfig = thinkBudget > 0 && adaptive ? { effort } : undefined;
   const u = { inp: 0, out: 0, cr: 0, cw: 0 };
   const lastQ = String(messages[messages.length - 1]?.content || "").slice(0, 300);
   async function saveUsage() {
@@ -202,6 +209,7 @@ export async function POST(req: NextRequest) {
               model,
               max_tokens: Math.max(6000, thinkBudget + 3000),
               ...(thinking ? { thinking } : {}),
+              ...(outputConfig ? { output_config: outputConfig } : {}),
               system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
               tools: TOOLS,
               messages: convo,
