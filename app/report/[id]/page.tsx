@@ -94,6 +94,7 @@ export default function ReportPage() {
   const [incDetail, setIncDetail] = useState("");
   const [incUrgency, setIncUrgency] = useState("normal");
   const [incDepts, setIncDepts] = useState<string[]>([]);
+  const [myPartFiled, setMyPartFiled] = useState(false);
 
   useEffect(() => {
     if (id) load();
@@ -126,6 +127,15 @@ export default function ReportPage() {
       supabase.rpc("can_approve_email", { p_email: (s as Submission).created_by }),
     ]);
 
+    // On a report several people share, each files their own part. Knowing
+    // whether this person has filed theirs is what decides if the day is
+    // still open to them after someone else has filed.
+    const { data: parts } = await supabase
+      .from("report_submission_parts").select("email").eq("submission_id", id);
+    setMyPartFiled(
+      ((parts as { email: string }[]) || []).some((x) => x.email === profile?.email)
+    );
+
     setApproverOk(!!appr);
 
     setSub(s as Submission);
@@ -153,7 +163,16 @@ export default function ReportPage() {
 
   // Editable only while it is a draft and yours. Everything after that
   // goes through a request, so an approval always refers to what was read.
-  const readOnly = !sub || sub.status !== "draft" || (!mine && !isDirector(profile?.role));
+  // A shared report stays open to anyone who has not yet filed their own part,
+  // even after a colleague has filed theirs — otherwise the first person to
+  // press the button closes the day on everybody else.
+  const stillMineToFill =
+    !!form?.is_shared && sub?.status === "submitted" && mine && !myPartFiled;
+
+  const readOnly =
+    !sub ||
+    (sub.status !== "draft" && !stillMineToFill) ||
+    (!mine && !isDirector(profile?.role));
 
   const canReview = useMemo(() => {
     if (!sub || !form || !profile) return false;
