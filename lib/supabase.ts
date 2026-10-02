@@ -123,6 +123,20 @@ export type ReportForm = {
   is_shared?: boolean | null;
 };
 
+// Every timestamp the staff read is a Yangon one. The database keeps UTC and
+// half the people reading this are in another zone, so the conversion belongs
+// in one place rather than at each call site.
+export function yangon(ts?: string | null, withTime = true): string {
+  if (!ts) return "-";
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return "-";
+  return d.toLocaleString("en-GB", {
+    timeZone: "Asia/Yangon",
+    day: "2-digit", month: "short", year: "numeric",
+    ...(withTime ? { hour: "2-digit", minute: "2-digit", hour12: false } : {}),
+  });
+}
+
 export type SubmissionStatus =
   | "draft"
   | "submitted"
