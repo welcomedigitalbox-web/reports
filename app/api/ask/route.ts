@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// Thinking plus several queries takes longer than a page load. The owner is
+// waiting for an answer worth having, not for the fastest possible reply.
+export const maxDuration = 300;
 
 const SYSTEM = `You are the business analyst for Edu Baby House (baby products retail, Myanmar).
 You answer the owner's questions using ONLY data from the database via the run_sql tool.
@@ -95,10 +97,29 @@ Rules:
 4. Flag data that looks wrong (e.g. conversion over 100%, actual 10x target) instead of treating it as real performance.
 5. ALWAYS answer in Burmese (Myanmar language, မြန်မာဘာသာ). The ONLY exception is that you may answer in English when the owner writes to you in English. Never answer in Korean, Japanese, Chinese, Thai, or any other language, whatever language the question appears to be in. Keep metric names and numbers as they are. Lead with the direct answer, then key reasons, then 1-3 concrete suggestions.
 6. If run_sql returns a system error (function not found, schema cache, permission denied), do NOT retry. Stop and report the error in one sentence.
-7. Be fast: use as few queries as possible (ideally 1-2), and never more than 4 in total. Keep the answer concise.
+7. Work the question properly before answering. Plan in your thinking: what
+   exactly is being asked, which figure answers it, and what would make the
+   answer wrong. Then query. Two to five queries is normal; eight is the
+   ceiling. One lazy query and a vague paragraph is the failure to avoid, and
+   so is ten near-identical ones.
 10. Do not run near-identical searches over and over. If two attempts return nothing, stop
     searching and answer with what you have, saying plainly which figure is not recorded and
     where it would have to be entered. A thin answer beats no answer.
+13. Show the figures you answered from. After the headline sentence, give the
+    numbers themselves — by day, by shop, or by whatever the question compared —
+    so the owner can check the conclusion rather than take it on trust. A claim
+    with no number behind it is not an answer.
+14. Say which days you looked at, in words, every time: "စက်တင်ဘာ ၂၅ ကနေ
+    အောက်တိုဘာ ၁ အထိ". If the question has no period in it, take the last 7 days
+    and say so. If it is ambiguous in some other way, state the reading you took
+    in one clause and answer it rather than asking the owner to re-phrase.
+15. "Why" questions need a comparison, not a description. Put the period against
+    the one before it, or the shop against the other shops, find where the
+    difference actually sits, and name it with the number. If the data cannot
+    show why, say which figure would be needed and where it would be entered.
+16. Be careful before saying a thing is not recorded. Check the obvious view, then
+    ai_schema for the column name, before concluding. Saying "no data" when the
+    data is there, under another name, is the worst answer you can give.
 11. START with ai_daily. Sales, invoices, gross profit, discount, returns, target,
     achievement and whether the report was filed are all there, one row per shop per day,
     so most questions need one short query and no joins. Go to the other views only for
@@ -136,7 +157,15 @@ export async function POST(req: NextRequest) {
   const queries: string[] = [];
   const system = SYSTEM.replace("${TODAY}", new Date().toISOString().slice(0, 10));
 
+  // Set AI_MODEL in the environment to change this. The analysis is worth a
+  // stronger model than the chat it grew out of.
   const model = process.env.AI_MODEL || "claude-sonnet-5";
+  // Room to think the question through before the first query. This is what
+  // the owner means by wanting it to reason like the chat does.
+  const thinkBudget = Number(process.env.AI_THINKING_BUDGET || 4000);
+  const thinking = thinkBudget > 0
+    ? { type: "enabled" as const, budget_tokens: thinkBudget }
+    : undefined;
   const u = { inp: 0, out: 0, cr: 0, cw: 0 };
   const lastQ = String(messages[messages.length - 1]?.content || "").slice(0, 300);
   async function saveUsage() {
@@ -151,72 +180,166 @@ export async function POST(req: NextRequest) {
       cost_usd: cost,
     }).then(({ error }) => { if (error) console.error("ai_usage insert:", error.message); });
   }
-  for (let i = 0; i < 4; i++) {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY!,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({ model, max_tokens: 3000, system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }], tools: TOOLS, messages: convo }),
-    });
-    const data = await r.json();
-    if (data?.usage) {
-      u.inp += data.usage.input_tokens || 0; u.out += data.usage.output_tokens || 0;
-      u.cr += data.usage.cache_read_input_tokens || 0; u.cw += data.usage.cache_creation_input_tokens || 0;
-    }
-    if (!r.ok) return NextResponse.json({ error: data?.error?.message || "AI error" }, { status: 500 });
+  // The answer is streamed as it is written. Waiting half a minute at a blank
+  // screen is most of what "slow" meant here; the thinking and the queries
+  // take as long either way, but the owner can see the work happening.
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (o: unknown) =>
+        controller.enqueue(encoder.encode(JSON.stringify(o) + "\n"));
 
-    convo.push({ role: "assistant", content: data.content });
-    if (data.stop_reason !== "tool_use") {
-      const text = data.content.filter((c: { type: string }) => c.type === "text").map((c: { text: string }) => c.text).join("\n").replace(OTHER_SCRIPTS, "").trim();
-      await saveUsage(); return NextResponse.json({ answer: text, queries });
-    }
-    const results = [];
-    for (const c of data.content) {
-      if (c.type !== "tool_use") continue;
-      queries.push(c.input.query);
-      const { data: rows, error } = await sb.rpc("ai_run_sql", { p_query: c.input.query });
-      results.push({
-        type: "tool_result", tool_use_id: c.id,
-        content: JSON.stringify(error ? { error: error.message } : rows).slice(0, 60000),
-        is_error: !!error,
-      });
-    }
-    convo.push({ role: "user", content: results });
-  }
-  // Out of tool rounds. Rather than hand back a blank apology, ask once more
-  // with the tools removed so the model answers from what it already found.
-  const last = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": process.env.ANTHROPIC_API_KEY!,
-      "anthropic-version": "2023-06-01",
+      try {
+        for (let round = 0; round < 8; round++) {
+          const r = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-api-key": process.env.ANTHROPIC_API_KEY!,
+              "anthropic-version": "2023-06-01",
+            },
+            body: JSON.stringify({
+              model,
+              max_tokens: Math.max(6000, thinkBudget + 3000),
+              ...(thinking ? { thinking } : {}),
+              system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
+              tools: TOOLS,
+              messages: convo,
+              stream: true,
+            }),
+          });
+
+          if (!r.ok || !r.body) {
+            const err = await r.text();
+            send({ type: "error", error: err.slice(0, 400) });
+            controller.close();
+            return;
+          }
+
+          // Rebuild the blocks as they arrive: text goes to the reader at
+          // once, a tool call has to be whole before it can be run.
+          const blocks: Record<number, {
+            type: string; text?: string; id?: string; name?: string; json?: string;
+            thinking?: string; signature?: string;
+          }> = {};
+          let stopReason = "";
+          let buf = "";
+          const reader = r.body.getReader();
+          const dec = new TextDecoder();
+
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += dec.decode(value, { stream: true });
+            const lines = buf.split("\n");
+            buf = lines.pop() || "";
+            for (const line of lines) {
+              if (!line.startsWith("data:")) continue;
+              let ev: Record<string, unknown>;
+              try { ev = JSON.parse(line.slice(5).trim()); } catch { continue; }
+              const t = ev.type as string;
+
+              if (t === "content_block_start") {
+                const idx = ev.index as number;
+                const cb = ev.content_block as Record<string, unknown>;
+                blocks[idx] = {
+                  type: String(cb.type),
+                  text: "", json: "", thinking: "",
+                  id: cb.id as string | undefined,
+                  name: cb.name as string | undefined,
+                };
+                if (cb.type === "tool_use") send({ type: "step", step: "query" });
+                if (cb.type === "thinking") send({ type: "step", step: "thinking" });
+              } else if (t === "content_block_delta") {
+                const idx = ev.index as number;
+                const d = ev.delta as Record<string, unknown>;
+                const b = blocks[idx];
+                if (!b) continue;
+                if (d.type === "text_delta") {
+                  const piece = String(d.text || "");
+                  b.text = (b.text || "") + piece;
+                  send({ type: "delta", text: piece.replace(OTHER_SCRIPTS, "") });
+                } else if (d.type === "input_json_delta") {
+                  b.json = (b.json || "") + String(d.partial_json || "");
+                } else if (d.type === "thinking_delta") {
+                  b.thinking = (b.thinking || "") + String(d.thinking || "");
+                } else if (d.type === "signature_delta") {
+                  b.signature = String(d.signature || "");
+                }
+              } else if (t === "message_delta") {
+                const d = ev.delta as Record<string, unknown> | undefined;
+                if (d?.stop_reason) stopReason = String(d.stop_reason);
+                const us = ev.usage as Record<string, number> | undefined;
+                if (us) u.out += us.output_tokens || 0;
+              } else if (t === "message_start") {
+                const m = ev.message as { usage?: Record<string, number> };
+                const us = m?.usage;
+                if (us) {
+                  u.inp += us.input_tokens || 0;
+                  u.cr += us.cache_read_input_tokens || 0;
+                  u.cw += us.cache_creation_input_tokens || 0;
+                }
+              }
+            }
+          }
+
+          // Hand the assistant's turn back in the shape the API expects, so a
+          // thinking block keeps its signature and a tool call its arguments.
+          const assistant = Object.keys(blocks)
+            .map(Number).sort((a, b) => a - b)
+            .map((i) => {
+              const b = blocks[i];
+              if (b.type === "text") return { type: "text", text: b.text || "" };
+              if (b.type === "thinking")
+                return { type: "thinking", thinking: b.thinking || "", signature: b.signature || "" };
+              if (b.type === "redacted_thinking") return null;
+              if (b.type === "tool_use")
+                return { type: "tool_use", id: b.id, name: b.name, input: JSON.parse(b.json || "{}") };
+              return null;
+            })
+            .filter(Boolean);
+
+          convo.push({ role: "assistant", content: assistant });
+
+          if (stopReason !== "tool_use") {
+            await saveUsage();
+            send({ type: "done", queries });
+            controller.close();
+            return;
+          }
+
+          const results = [];
+          for (const b of assistant as { type: string; id?: string; input?: { query?: string } }[]) {
+            if (b.type !== "tool_use") continue;
+            const q = String(b.input?.query || "");
+            queries.push(q);
+            send({ type: "query", query: q });
+            const { data: rows, error } = await sb.rpc("ai_run_sql", { p_query: q });
+            results.push({
+              type: "tool_result", tool_use_id: b.id,
+              content: JSON.stringify(error ? { error: error.message } : rows).slice(0, 60000),
+              is_error: !!error,
+            });
+          }
+          convo.push({ role: "user", content: results });
+        }
+
+        send({ type: "delta", text: "\n\nရှာလို့ မပြီးသေးပါ။ မေးခွန်းကို ပိုတိတိကျကျ ပြန်မေးပေးပါ။" });
+        await saveUsage();
+        send({ type: "done", queries });
+        controller.close();
+      } catch (e) {
+        send({ type: "error", error: String(e).slice(0, 300) });
+        controller.close();
+      }
     },
-    body: JSON.stringify({
-      model, max_tokens: 1500,
-      system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
-      messages: [...convo, {
-        role: "user",
-        content: "မရှာတွေ့တာတွေ ထပ်မရှာတော့ဘဲ၊ ခုအထိ ရထားတဲ့ ဒေတာနဲ့ပဲ ဖြေပါ။ " +
-                 "ဘယ်ကိန်းဂဏန်းက စနစ်ထဲ မှတ်ထားခြင်း မရှိလဲ၊ ဘယ်နေရာမှာ ဖြည့်ရမလဲ ပြောပါ။",
-      }],
-    }),
   });
-  const lastData = await last.json();
-  if (lastData?.usage) {
-    u.inp += lastData.usage.input_tokens || 0; u.out += lastData.usage.output_tokens || 0;
-    u.cr += lastData.usage.cache_read_input_tokens || 0; u.cw += lastData.usage.cache_creation_input_tokens || 0;
-  }
-  const lastText = Array.isArray(lastData?.content)
-    ? lastData.content.filter((c: { type: string }) => c.type === "text")
-        .map((c: { text: string }) => c.text).join("\n").replace(OTHER_SCRIPTS, "").trim()
-    : "";
-  await saveUsage();
-  return NextResponse.json({
-    answer: lastText || "မေးခွန်းက ရှုပ်လွန်းလို့ ပိုတိတိကျကျ ပြန်မေးပေးပါ။",
-    queries,
+
+  return new Response(stream, {
+    headers: {
+      "content-type": "application/x-ndjson; charset=utf-8",
+      "cache-control": "no-store",
+      "x-accel-buffering": "no",
+    },
   });
 }

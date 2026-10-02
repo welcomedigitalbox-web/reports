@@ -60,7 +60,11 @@ export default function AskPage() {
     }
     if (id) await supabase.from("ai_messages").insert({ chat_id: id, role: "user", content: q });
 
-    let reply: Msg;
+    // The answer arrives a few words at a time, so it starts appearing while
+    // the rest is still being written rather than after everything is done.
+    let reply: Msg = { role: "assistant", content: "", queries: [] };
+    setMsgs([...next, reply]);
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const r = await fetch("/api/ask", {
@@ -68,11 +72,45 @@ export default function AskPage() {
         headers: { "content-type": "application/json", authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify({ messages: next.slice(-10).map(({ role, content }) => ({ role, content })) }),
       });
-      const d = await r.json();
-      reply = { role: "assistant", content: d.answer || `Error: ${d.error}`, queries: d.queries };
+
+      if (!r.body) throw new Error("no response");
+      const reader = r.body.getReader();
+      const dec = new TextDecoder();
+      let buf = "";
+      let text = "";
+      const qs: string[] = [];
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          let ev: { type: string; text?: string; query?: string; error?: string; queries?: string[] };
+          try { ev = JSON.parse(line); } catch { continue; }
+
+          if (ev.type === "delta") {
+            text += ev.text || "";
+          } else if (ev.type === "step") {
+            // Something is happening even before the first word arrives.
+            if (!text) text = ev.text || "…";
+          } else if (ev.type === "query") {
+            if (ev.query) qs.push(ev.query);
+          } else if (ev.type === "error") {
+            text += `\n\nError: ${ev.error}`;
+          } else if (ev.type === "done") {
+            if (ev.queries) qs.splice(0, qs.length, ...ev.queries);
+          }
+          reply = { role: "assistant", content: text, queries: qs.length ? [...qs] : undefined };
+          setMsgs([...next, reply]);
+        }
+      }
     } catch (e) {
       reply = { role: "assistant", content: `Error: ${String(e)}` };
     }
+
     setMsgs([...next, reply]);
     if (id) {
       await supabase.from("ai_messages").insert({ chat_id: id, role: "assistant", content: reply.content, queries: reply.queries || null });
