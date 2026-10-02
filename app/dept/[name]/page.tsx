@@ -34,6 +34,10 @@ export default function DeptPage() {
         : new URLSearchParams(window.location.search).get("date");
     return fromLink || new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Yangon" });
   });
+  // One day is the common case; a week or a month is the question a manager
+  // asks at the end of it. Same page, same figures, added up.
+  const [dateTo, setDateTo] = useState("");
+  const range = !!dateTo && dateTo > date;
   const [forms, setForms] = useState<ReportForm[]>([]);
   const [subs, setSubs] = useState<Submission[]>([]);
   const [people, setPeople] = useState<P[]>([]);
@@ -42,7 +46,7 @@ export default function DeptPage() {
   const [kinds, setKinds] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { if (profile) load(); /* eslint-disable-next-line */ }, [profile?.id, date, name]);
+  useEffect(() => { if (profile) load(); /* eslint-disable-next-line */ }, [profile?.id, date, dateTo, name]);
 
   async function load() {
     setLoading(true);
@@ -51,8 +55,12 @@ export default function DeptPage() {
     const ids = fs.map((x) => x.id);
     const [{ data: s }, { data: p }, { data: st }, { data: sec }] = await Promise.all([
       ids.length
-        ? supabase.from("report_submissions").select("*").in("form_id", ids)
-            .eq("report_date", date).not("status", "in", "(draft,archived)")
+        ? (range
+            ? supabase.from("report_submissions").select("*").in("form_id", ids)
+                .gte("report_date", date).lte("report_date", dateTo)
+                .not("status", "in", "(draft,archived)")
+            : supabase.from("report_submissions").select("*").in("form_id", ids)
+                .eq("report_date", date).not("status", "in", "(draft,archived)"))
         : Promise.resolve({ data: [] }),
       supabase.from("profiles").select("id,email,role,store_id,is_dept_head").eq("department", name),
       supabase.from("stores").select("id,name"),
@@ -89,7 +97,11 @@ export default function DeptPage() {
   };
   const staffSubs = subs.filter((s) => !isCons(s.form_id));
   const consSubs = subs.filter((s) => isCons(s.form_id));
-  const who = (s: Submission) => (s.store_id && stores[s.store_id]) || s.created_by.split("@")[0];
+  const who = (s: Submission) => {
+    const n = (s.store_id && stores[s.store_id]) || s.created_by.split("@")[0];
+    // Over a range, "who said it" is not enough — when matters too.
+    return range ? `${n} · ${String(s.report_date).slice(5)}` : n;
+  };
 
   const summary = useMemo(() => {
     const nums = new Map<string, { label: string; total: number }>();
@@ -122,7 +134,7 @@ export default function DeptPage() {
     const tgt = nums.get("daily_target")?.total, act = nums.get("actual_sale")?.total;
     return { nums: [...nums.values()], texts: [...texts.values()], pct: tgt ? (act || 0) / tgt * 100 : null };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subs, struct, stores, forms]);
+  }, [subs, struct, stores, forms, range]);
 
   // Wholesale invoices are far larger than showroom ones, so one blended
   // average invoice value tells nobody anything. Each channel keeps its own.
@@ -196,6 +208,15 @@ export default function DeptPage() {
   const filedBy = new Set(staffSubs.map((s) => s.created_by));
   const notFiled = filers.filter((p) => !filedBy.has(p.email));
 
+  const days = range
+    ? Math.round(
+        (new Date(dateTo + "T00:00:00Z").getTime() -
+          new Date(date + "T00:00:00Z").getTime()) / 86400000) + 1
+    : 1;
+  // Over a range, "who has not filed" is a per-day question. What is useful
+  // is how many of the days expected actually arrived.
+  const expected = filers.length * days;
+
   if (authLoading || loading) return <div className="pt-16 text-center text-sm text-slate-400">…</div>;
   if (!profile || !isDirector(profile.role)) return null;
 
@@ -203,9 +224,30 @@ export default function DeptPage() {
     <div className="max-w-4xl mx-auto pt-6">
       <button onClick={() => router.push("/dashboard")} className="text-sm text-blue-600 mb-4">← Dashboard</button>
       <div className="flex items-center justify-between mb-5">
-        <h1 className="text-xl font-semibold capitalize">{name} · Daily Summary</h1>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-          className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm" />
+        <div>
+          <h1 className="text-xl font-semibold capitalize">
+            {name} · {range ? "Summary" : "Daily Summary"}
+          </h1>
+          {range && (
+            <p className="text-sm text-slate-500 mt-0.5">
+              {date} → {dateTo} · {days} days · {subs.length} reports
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <input type="date" value={date} max={dateTo || undefined}
+            onChange={(e) => setDate(e.target.value)}
+            className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm" />
+          <span className="text-xs text-slate-400">to</span>
+          <input type="date" value={dateTo} min={date}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm" />
+          {range && (
+            <button onClick={() => setDateTo("")} className="text-xs text-blue-600 px-1">
+              one day
+            </button>
+          )}
+        </div>
       </div>
 
       {channels.length > 0 && (
@@ -265,8 +307,12 @@ export default function DeptPage() {
 
       <div className="bg-white border border-slate-200 rounded-xl p-5 mb-5">
         <div className="flex flex-wrap gap-2 text-xs mb-4">
-          <span className="px-2 py-1 rounded bg-slate-100">Filed {filers.length - notFiled.length}/{filers.length}</span>
-          {notFiled.length > 0 && (
+          <span className="px-2 py-1 rounded bg-slate-100">
+            {range
+              ? `Filed ${staffSubs.length}/${expected}`
+              : `Filed ${filers.length - notFiled.length}/${filers.length}`}
+          </span>
+          {!range && notFiled.length > 0 && (
             <span className="px-2 py-1 rounded bg-amber-50 text-amber-700">
               Not filed: {notFiled.map((p) => (p.store_id && stores[p.store_id]) || p.email.split("@")[0]).join(" · ")}
             </span>
