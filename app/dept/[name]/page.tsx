@@ -109,7 +109,10 @@ export default function DeptPage() {
   };
 
   const summary = useMemo(() => {
-    const nums = new Map<string, { label: string; total: number }>();
+    const nums = new Map<string, {
+      label: string; total: number; count: number; last: number;
+      rule: string; lastDay?: string;
+    }>();
     const texts = new Map<string, { label: string; items: { who: string; text: string }[] }>();
     for (const s of staffSubs) {
       const a = (s.answers || {}) as Record<string, unknown>;
@@ -121,11 +124,24 @@ export default function DeptPage() {
           for (const fd of sec.fields) {
             const v = r?.[fd.key] ?? r?.[fd.id];
             if (DERIVED.has(fd.key)) continue;
-            if (NUM.has(fd.field_type)) {
+            // Over a range each figure is read the way its own rule says:
+            // sales add up, a percentage averages, a follower count is
+            // whatever it last stood at.
+            const rule = (fd.rollup || (NUM.has(fd.field_type) ? "sum" : "none")) as string;
+            if (rule !== "none" && (NUM.has(fd.field_type) || fd.field_type === "percent")) {
               const n = Number(v);
               if (v === "" || v == null || isNaN(n)) continue;
-              const e = nums.get(fd.key) || { label: fd.label, total: 0 };
-              e.total += n; nums.set(fd.key, e);
+              const e = nums.get(fd.key) || { label: fd.label, total: 0, count: 0, last: 0, rule };
+              if (rule === "last") {
+                // Later day wins; same day, later report wins.
+                if (String(s.report_date) >= String(e.lastDay || "")) {
+                  e.last = n; e.lastDay = String(s.report_date);
+                }
+              } else {
+                e.total += n;
+              }
+              e.count += 1;
+              nums.set(fd.key, e);
             } else if (TXT.has(fd.field_type)) {
               const t = String(v ?? "").trim();
               if (EMPTY.has(t.toLowerCase())) continue;
@@ -137,7 +153,15 @@ export default function DeptPage() {
       }
     }
     const tgt = nums.get("daily_target")?.total, act = nums.get("actual_sale")?.total;
-    return { nums: [...nums.values()], texts: [...texts.values()], pct: tgt ? (act || 0) / tgt * 100 : null };
+    const shown = [...nums.values()].map((e) => ({
+      label: e.label,
+      total:
+        e.rule === "avg" ? (e.count ? e.total / e.count : 0)
+        : e.rule === "last" ? e.last
+        : e.total,
+      rule: e.rule,
+    }));
+    return { nums: shown, texts: [...texts.values()], pct: tgt ? (act || 0) / tgt * 100 : null };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subs, struct, stores, forms, range]);
 

@@ -45,6 +45,8 @@ export type FieldType =
   | "image" | "photo";
 
 export type FormField = {
+  // How this field reads over a date range. See report_fields.rollup.
+  rollup?: "sum" | "avg" | "last" | "none" | null;
   id: string;
   section_id: string;
   key: string;
