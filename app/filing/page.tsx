@@ -28,11 +28,14 @@ const daysAgo = (n: number) => {
   return d.toLocaleDateString("en-CA", { timeZone: "Asia/Yangon" });
 };
 
+type Off = { day: string; department: string | null; note: string | null };
+
 export default function FilingPage() {
   const { profile, loading: authLoading } = useAuth();
   const [from, setFrom] = useState(daysAgo(7));
   const [to, setTo] = useState(daysAgo(1));
   const [rows, setRows] = useState<Row[]>([]);
+  const [offs, setOffs] = useState<Off[]>([]);
   const [dept, setDept] = useState("");
   const [busy, setBusy] = useState(true);
 
@@ -47,9 +50,24 @@ export default function FilingPage() {
 
   async function load() {
     setBusy(true);
-    const { data } = await supabase.rpc("filing_matrix", { p_from: from, p_to: to });
+    const [{ data }, { data: off }] = await Promise.all([
+      supabase.rpc("filing_matrix", { p_from: from, p_to: to }),
+      supabase.rpc("off_days", { p_from: from, p_to: to }),
+    ]);
     setRows((data as Row[]) || []);
+    setOffs((off as Off[]) || []);
     setBusy(false);
+  }
+
+  // A day nobody was meant to work is not a day anybody missed. Sundays
+  // come back from the database as a null department, which the shops are
+  // exempt from; a holiday row may name one department or apply to all.
+  function isOff(day: string, department: string) {
+    return offs.some((o) => {
+      if (o.day !== day) return false;
+      if (o.department) return o.department === department;
+      return o.note !== "Sunday" || department !== "sale";
+    });
   }
 
   const days = useMemo(
@@ -79,13 +97,14 @@ export default function FilingPage() {
     return [...m.values()]
       .map((x) => ({
         ...x,
-        missed: days.filter((d) => !x.byDay.get(d)?.filed).length,
+        missed: days.filter((d) => !isOff(d, x.department) && !x.byDay.get(d)?.filed).length,
+        due: days.filter((d) => !isOff(d, x.department)).length,
       }))
       .sort((a, b) => b.missed - a.missed || a.email.localeCompare(b.email));
-  }, [rows, days, dept]);
+  }, [rows, days, dept, offs]);
 
   const totals = useMemo(() => {
-    const expected = lines.length * days.length;
+    const expected = lines.reduce((t, l) => t + l.due, 0);
     const missed = lines.reduce((t, l) => t + l.missed, 0);
     return { expected, missed, filed: expected - missed };
   }, [lines, days]);
@@ -169,17 +188,20 @@ export default function FilingPage() {
                   {days.map((d) => {
                     const r = l.byDay.get(d);
                     const ok = !!r?.filed;
+                    const off = isOff(d, l.department);
                     return (
                       <td key={d} className="px-1 py-2">
                         <span
                           title={
-                            ok
+                            off
+                              ? `${d} · off day`
+                              : ok
                               ? `${d} · ${r?.status} · ${yangon(r?.submitted_at)}`
                               : `${d} · not filed`
                           }
                           className={
                             "block w-5 h-5 rounded " +
-                            (ok ? "bg-green-500" : "bg-amber-400")
+                            (ok ? "bg-green-500" : off ? "bg-slate-200" : "bg-amber-400")
                           }
                         />
                       </td>
@@ -204,7 +226,7 @@ export default function FilingPage() {
       )}
 
       <p className="text-xs text-slate-400 mt-3">
-        Green filed · amber not filed. Hover a square for the time it was filed. Yangon time.
+        Green filed · amber not filed · grey an off day, which counts against nobody. Hover a square for the time it was filed. Yangon time.
         A report marked <b>shared</b> is one the team fills in together — each person
         counts as having filed once they have added their own part. A <b>weekly</b>
         report covers its whole week, so one filing turns the whole week green.
