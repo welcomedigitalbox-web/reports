@@ -1,7 +1,7 @@
 "use client";
 import { useRef, useState, useEffect } from "react";
 
-import { Trash2, Plus } from "lucide-react";
+import { Trash2, Plus, ExternalLink } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { FormField, FormSection } from "@/lib/supabase";
 
@@ -136,6 +136,32 @@ function Field({
   const base =
     "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm disabled:bg-slate-50 disabled:text-slate-500";
   const v = value ?? "";
+
+  // A link that has been pasted into a report is there to be followed. The
+  // box stays a box — people still edit it — with the arrow beside it.
+  const asUrl = /^https?:\/\/\S+$/i.test(String(v).trim()) ? String(v).trim() : null;
+  if (asUrl && field.field_type !== "image" && field.field_type !== "photo") {
+    return (
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          className={base}
+          value={String(v)}
+          disabled={readOnly}
+          onChange={(e) => onChange(e.target.value)}
+        />
+        <a
+          href={asUrl}
+          target="_blank"
+          rel="noreferrer"
+          title={asUrl}
+          className="shrink-0 px-2 py-2 text-blue-600 hover:text-blue-700"
+        >
+          <ExternalLink size={16} />
+        </a>
+      </div>
+    );
+  }
 
   switch (field.field_type) {
     case "textarea":
