@@ -13,6 +13,7 @@ type Row = {
   department: string;
   form_id: string;
   form_name: string;
+  is_shared: boolean;
   day: string;
   filed: boolean;
   status: string | null;
@@ -63,12 +64,13 @@ export default function FilingPage() {
   // One line per person per form: two forms missed on the same day are two
   // reports missing, not one bad day.
   const lines = useMemo(() => {
-    const m = new Map<string, { email: string; department: string; form: string; byDay: Map<string, Row> }>();
+    const m = new Map<string, { email: string; department: string; form: string; shared: boolean; byDay: Map<string, Row> }>();
     for (const r of rows) {
       if (dept && r.department !== dept) continue;
       const k = `${r.email}|${r.form_id}`;
       const e = m.get(k) || {
-        email: r.email, department: r.department, form: r.form_name, byDay: new Map<string, Row>(),
+        email: r.email, department: r.department, form: r.form_name,
+        shared: r.is_shared, byDay: new Map<string, Row>(),
       };
       e.byDay.set(r.day, r);
       m.set(k, e);
@@ -150,7 +152,14 @@ export default function FilingPage() {
                     {l.email.split("@")[0]}
                     <span className="text-xs text-slate-400 ml-2 capitalize">{l.department}</span>
                   </td>
-                  <td className="px-3 py-2 text-slate-500 whitespace-nowrap">{l.form}</td>
+                  <td className="px-3 py-2 text-slate-500 whitespace-nowrap">
+                    {l.form}
+                    {l.shared && (
+                      <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">
+                        shared
+                      </span>
+                    )}
+                  </td>
                   {days.map((d) => {
                     const r = l.byDay.get(d);
                     const ok = !!r?.filed;
@@ -190,6 +199,8 @@ export default function FilingPage() {
 
       <p className="text-xs text-slate-400 mt-3">
         Green filed · amber not filed. Hover a square for the time it was filed. Yangon time.
+        A report marked <b>shared</b> is one the team fills in together — each person
+        counts as having filed once they have added their own part.
       </p>
     </div>
   );
