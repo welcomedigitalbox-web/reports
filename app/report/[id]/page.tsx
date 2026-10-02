@@ -96,6 +96,9 @@ export default function ReportPage() {
   const [incDepts, setIncDepts] = useState<string[]>([]);
   const [myPartFiled, setMyPartFiled] = useState(false);
   const [newDate, setNewDate] = useState("");
+  // Filing is the last chance to catch a figure typed into the wrong box, so
+  // the report is read back before it goes.
+  const [preview, setPreview] = useState(false);
 
   useEffect(() => {
     if (id) load();
@@ -483,7 +486,7 @@ export default function ReportPage() {
                   manager who is only adding their notes to it. */}
               {!readOnly && (
                 <button
-                  onClick={submitReport}
+                  onClick={() => setPreview(true)}
                   disabled={busy}
                   className="px-5 py-2 bg-blue-600 disabled:bg-slate-300 text-white rounded-lg text-sm font-semibold"
                 >
@@ -581,6 +584,71 @@ export default function ReportPage() {
           )}
         </div>
       </div>
+
+      {preview && (
+        <div className="fixed inset-0 bg-black/40 grid place-items-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-lg max-h-[85vh] flex flex-col">
+            <div className="px-6 pt-6 pb-3 border-b border-slate-100">
+              <h3 className="font-semibold text-lg">Check before filing</h3>
+              <p className="text-sm text-slate-500 mt-0.5">
+                {form?.name} · {sub?.report_date}
+              </p>
+            </div>
+
+            <div className="overflow-y-auto px-6 py-4 space-y-5">
+              {sections
+                .filter((sec) => sectionIsFor(sec, profile))
+                .map((sec) => {
+                  const rows = (answers[sec.id] as Record<string, unknown>[]) || [];
+                  const filled = sec.is_table
+                    ? rows.filter((r) => Object.values(r).some((v) => v !== "" && v != null))
+                    : sec.fields.filter(
+                        (f) => String(answers[f.key] ?? "").trim() !== ""
+                      );
+                  return (
+                    <div key={sec.id}>
+                      <div className="text-sm font-medium mb-2">{sec.title}</div>
+                      {filled.length === 0 ? (
+                        <p className="text-sm text-slate-400">nothing written</p>
+                      ) : sec.is_table ? (
+                        <p className="text-sm text-slate-600">
+                          {filled.length} row{filled.length > 1 ? "s" : ""}
+                        </p>
+                      ) : (
+                        <dl className="text-sm divide-y divide-slate-100">
+                          {(filled as typeof sec.fields).map((f) => (
+                            <div key={f.key} className="flex gap-4 py-1.5">
+                              <dt className="text-slate-500 w-1/2 shrink-0">{f.label}</dt>
+                              <dd className="text-slate-900 break-words">
+                                {String(answers[f.key])}
+                              </dd>
+                            </div>
+                          ))}
+                        </dl>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+
+            <div className="px-6 py-4 border-t border-slate-100 flex gap-2">
+              <button
+                onClick={() => setPreview(false)}
+                className="flex-1 py-2.5 border border-slate-200 rounded-lg text-sm font-medium"
+              >
+                Go back and change
+              </button>
+              <button
+                disabled={busy}
+                onClick={async () => { setPreview(false); await submitReport(); }}
+                className="flex-1 py-2.5 bg-blue-600 disabled:bg-slate-300 text-white rounded-lg text-sm font-semibold"
+              >
+                File it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {prompt && (
         <div className="fixed inset-0 bg-black/30 grid place-items-center z-50 p-4">
