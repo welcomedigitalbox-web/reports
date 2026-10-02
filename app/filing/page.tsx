@@ -149,7 +149,7 @@ export default function FilingPage() {
               {lines.map((l) => (
                 <tr key={l.email + l.form} className="border-t border-slate-100">
                   <td className="px-4 py-2 sticky left-0 bg-white whitespace-nowrap">
-                    {l.email.split("@")[0]}
+                    {l.email}
                     <span className="text-xs text-slate-400 ml-2 capitalize">{l.department}</span>
                   </td>
                   <td className="px-3 py-2 text-slate-500 whitespace-nowrap">
