@@ -1,7 +1,12 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { useAuth } from "../auth-context";
+import { useAuth, isDirector } from "../auth-context";
+
+// The bill is the owner's and the IT admin's business, not one hard-coded address.
+const canSee = (p?: { email?: string | null; role?: string | null } | null) =>
+  !!p && (isDirector(p.role) || ["itadmin", "system", "admin", "owner"].includes(p.role || "") ||
+    /^(itadmin|admin|owner)@/.test(p.email || ""));
 
 type Row = { id: number; email: string | null; question: string | null; model: string | null;
   input_tokens: number; output_tokens: number; cost_usd: number; created_at: string };
@@ -11,11 +16,11 @@ export default function UsagePage() {
   const { profile, loading } = useAuth();
   const [rows, setRows] = useState<Row[]>([]);
   useEffect(() => {
-    if (profile?.email !== "admin@edu.com") return;
+    if (!canSee(profile)) return;
     const from = new Date(Date.now() - 31 * 864e5).toISOString();
     supabase.from("ai_usage").select("*").gte("created_at", from)
       .order("created_at", { ascending: false }).then(({ data }) => setRows((data as Row[]) || []));
-  }, [profile?.email]);
+  }, [profile?.email, profile?.role]);
 
   const s = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
@@ -34,7 +39,7 @@ export default function UsagePage() {
   }, [rows]);
 
   if (loading) return null;
-  if (profile?.email !== "admin@edu.com") return <div className="pt-16 text-center text-sm text-slate-400">Admin only</div>;
+  if (!canSee(profile)) return <div className="pt-16 text-center text-sm text-slate-400">Admin only</div>;
 
   const card = "bg-white border border-slate-200 rounded-xl p-4";
   return (
