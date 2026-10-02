@@ -76,8 +76,15 @@ export default function Header() {
           >
             <span className="inline-flex items-center gap-1.5">
               {t.label}
-              {t.href === "/issues" && openIssues > 0 && (
-                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[11px] font-semibold leading-none">
+              {t.href === "/issues" && (
+                // Shown even at nought: "0" is an answer, a missing badge is
+                // only ever a question about whether it loaded.
+                <span
+                  className={
+                    "inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-semibold leading-none " +
+                    (openIssues > 0 ? "bg-red-600 text-white" : "bg-slate-200 text-slate-500")
+                  }
+                >
                   {openIssues > 99 ? "99+" : openIssues}
                 </span>
               )}
