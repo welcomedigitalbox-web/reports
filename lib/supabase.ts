@@ -76,6 +76,11 @@ export type FormSection = {
   route_emails: string[] | null;
   // A section nobody but its owner ever sees, filled in or not.
   private_to_route: boolean | null;
+  // Who the section is addressed TO. Anyone filling the form may write in it;
+  // these are the people it reaches through the Issues page.
+  notify_departments?: string[] | null;
+  notify_roles?: string[] | null;
+  notify_emails?: string[] | null;
   fields: FormField[];
 };
 
