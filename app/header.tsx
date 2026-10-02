@@ -26,7 +26,6 @@ export default function Header() {
         ...(isManagerTier(profile.role) || isDirector(profile.role) ? [{ href: "/targets", label: "Target" }] : []),
     ...(isDirector(profile.role) ? [{ href: "/dashboard", label: "Dashboard" }, { href: "/ask", label: "Ask AI" }] : []),
     ...(profile.email === "admin@edu.com" ? [{ href: "/usage", label: "AI Usage" }] : []),
-    { href: "/inbox", label: "Inbox" },
     { href: "/issues", label: "Issues" },
   ];
 
