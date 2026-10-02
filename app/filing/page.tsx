@@ -29,6 +29,7 @@ const daysAgo = (n: number) => {
 };
 
 type Off = { day: string; department: string | null; note: string | null };
+type Holiday = { day: string; department: string | null; note: string | null };
 
 export default function FilingPage() {
   const { profile, loading: authLoading } = useAuth();
@@ -36,6 +37,11 @@ export default function FilingPage() {
   const [to, setTo] = useState(daysAgo(1));
   const [rows, setRows] = useState<Row[]>([]);
   const [offs, setOffs] = useState<Off[]>([]);
+  const [showOff, setShowOff] = useState(false);
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [newDay, setNewDay] = useState("");
+  const [newDept, setNewDept] = useState("");
+  const [newNote, setNewNote] = useState("");
   const [dept, setDept] = useState("");
   const [busy, setBusy] = useState(true);
 
@@ -45,6 +51,7 @@ export default function FilingPage() {
   useEffect(() => {
     if (!allowed) return;
     load();
+    loadHolidays();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allowed, from, to]);
 
@@ -57,6 +64,38 @@ export default function FilingPage() {
     setRows((data as Row[]) || []);
     setOffs((off as Off[]) || []);
     setBusy(false);
+  }
+
+  // The holidays someone actually entered, as opposed to the standing
+  // Sunday rule, which has no row and cannot be deleted.
+  async function loadHolidays() {
+    const { data } = await supabase
+      .from("report_off_days")
+      .select("day, department, note")
+      .order("day");
+    setHolidays((data as Holiday[]) || []);
+  }
+
+  async function addHoliday() {
+    if (!newDay) return;
+    const { error } = await supabase.from("report_off_days").insert({
+      day: newDay,
+      department: newDept || null,
+      note: newNote || null,
+      created_by: profile?.email,
+    });
+    if (error) { alert(error.message); return; }
+    setNewDay(""); setNewNote(""); setNewDept("");
+    await Promise.all([loadHolidays(), load()]);
+  }
+
+  async function removeHoliday(h: Holiday) {
+    const q = supabase.from("report_off_days").delete().eq("day", h.day);
+    const { error } = h.department
+      ? await q.eq("department", h.department)
+      : await q.is("department", null);
+    if (error) { alert(error.message); return; }
+    await Promise.all([loadHolidays(), load()]);
   }
 
   // A day nobody was meant to work is not a day anybody missed. Sundays
@@ -136,6 +175,65 @@ export default function FilingPage() {
           <option value="">all departments</option>
           {depts.map((d) => <option key={d} value={d}>{d}</option>)}
         </select>
+      </div>
+
+      <div className="mb-5">
+        <button onClick={() => setShowOff(!showOff)}
+          className="text-sm text-blue-600">
+          {showOff ? "− " : "+ "}Off days ({holidays.length} holidays · Sundays are automatic)
+        </button>
+
+        {showOff && (
+          <div className="mt-3 bg-white border border-slate-200 rounded-xl p-4">
+            <p className="text-xs text-slate-500 mb-3">
+              Sunday is an off day for every department except <b>sale</b>, and needs no
+              entry. Add the holidays and closures below; leave the department empty for
+              a day the whole company is closed. An off day counts against nobody.
+            </p>
+
+            <div className="flex flex-wrap items-end gap-2 mb-4">
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Date</label>
+                <input type="date" value={newDay} onChange={(e) => setNewDay(e.target.value)}
+                  className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Department</label>
+                <select value={newDept} onChange={(e) => setNewDept(e.target.value)}
+                  className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm capitalize">
+                  <option value="">everyone</option>
+                  {depts.map((d) => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+              <div className="flex-1 min-w-[12rem]">
+                <label className="block text-xs text-slate-500 mb-1">Note</label>
+                <input value={newNote} onChange={(e) => setNewNote(e.target.value)}
+                  placeholder="Thadingyut"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm" />
+              </div>
+              <button onClick={addHoliday} disabled={!newDay}
+                className="bg-blue-600 disabled:bg-slate-300 text-white text-sm px-4 py-2 rounded-lg font-medium">
+                Add
+              </button>
+            </div>
+
+            <div className="divide-y divide-slate-100">
+              {holidays.map((h) => (
+                <div key={h.day + (h.department || "")}
+                  className="flex items-center gap-3 py-1.5 text-sm">
+                  <span className="w-28 tabular-nums">{h.day}</span>
+                  <span className="w-32 text-slate-500 capitalize">{h.department || "everyone"}</span>
+                  <span className="flex-1 text-slate-600">{h.note || ""}</span>
+                  <button onClick={() => removeHoliday(h)}
+                    className="text-xs text-red-600">remove</button>
+                </div>
+              ))}
+              {holidays.length === 0 && (
+                <p className="text-sm text-slate-400 py-2">No holidays entered yet</p>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-3 mb-5">
