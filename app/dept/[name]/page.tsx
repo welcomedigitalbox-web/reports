@@ -27,13 +27,18 @@ export default function DeptPage() {
   const { profile, loading: authLoading } = useAuth();
   // The day comes from the dashboard that linked here, so clicking a
   // department does not quietly jump the reader back to today.
-  const [date, setDate] = useState(() => {
-    const fromLink =
-      typeof window === "undefined"
-        ? null
-        : new URLSearchParams(window.location.search).get("date");
-    return fromLink || new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Yangon" });
-  });
+  const [date, setDate] = useState(
+    new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Yangon" })
+  );
+
+  // The day comes from the dashboard that linked here. It is read after the
+  // first render rather than during it: the page is rendered once on the
+  // server, where there is no address bar, and a value picked there would
+  // stick through hydration and quietly show today instead.
+  useEffect(() => {
+    const fromLink = new URLSearchParams(window.location.search).get("date");
+    if (fromLink) setDate(fromLink);
+  }, []);
   // One day is the common case; a week or a month is the question a manager
   // asks at the end of it. Same page, same figures, added up.
   const [dateTo, setDateTo] = useState("");
