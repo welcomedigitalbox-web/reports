@@ -8,12 +8,32 @@ import {
 import { useAuth, isDirector, isManagerTier } from "../../auth-context";
 
 type P = { id: string; email: string; role: string; store_id: string | null; is_dept_head: boolean };
+
+function Shot({ path, who }: { path: string; who: string }) {
+  const [url, setUrl] = useState("");
+  useEffect(() => {
+    let alive = true;
+    if (path.startsWith("http")) { setUrl(path); return; }
+    supabase.storage.from("report-photos").createSignedUrl(path, 3600)
+      .then(({ data }) => { if (alive) setUrl(data?.signedUrl || ""); });
+    return () => { alive = false; };
+  }, [path]);
+  if (!url) return null;
+  return (
+    <a href={url} target="_blank" rel="noreferrer" className="shrink-0" title={who}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={url} alt={who} className="h-20 w-20 rounded-lg border border-slate-200 object-cover" />
+      <span className="block text-[10px] text-slate-400 mt-0.5 text-center truncate w-20">{who}</span>
+    </a>
+  );
+}
 const EMPTY = new Set(["", "-", "nothing", "no plan", "none", "no", "n/a", "na", "nil"]);
 const NUM = new Set(["number", "money"]);
 const DERIVED = new Set(["avg_invoice", "achievement_pct", "conversion_rate"]);
 const KIND_LABEL: Record<string, string> = { retail: "Retail", wholesale: "Wholesale", online: "Online" };
 const KIND_ORDER = ["retail", "wholesale", "online"];
 const TXT = new Set(["text", "textarea"]);
+const PIC = new Set(["image", "photo", "file"]);
 const fmt = (n: number) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(n);
 const TONE: Record<string, string> = {
   submitted: "bg-amber-50 text-amber-700", approved: "bg-blue-50 text-blue-700",
@@ -108,13 +128,12 @@ export default function DeptPage() {
     return range ? `${n} · ${String(s.report_date).slice(5)}` : n;
   };
 
-  const summary = useMemo(() => {
-    const nums = new Map<string, {
-      label: string; total: number; count: number; last: number;
-      rule: string; lastDay?: string;
-    }>();
+  // One roll-up, used for the staff submissions and again for the managers'.
+  const rollUp = (from: Submission[]) => {
+    const nums = new Map<string, { label: string; total: number }>();
     const texts = new Map<string, { label: string; items: { who: string; text: string }[] }>();
-    for (const s of staffSubs) {
+    const pics = new Map<string, { label: string; items: { who: string; path: string }[] }>();
+    for (const s of from) {
       const a = (s.answers || {}) as Record<string, unknown>;
       for (const sec of struct[s.form_id] || []) {
         const rows: Record<string, unknown>[] = sec.is_table
@@ -124,46 +143,37 @@ export default function DeptPage() {
           for (const fd of sec.fields) {
             const v = r?.[fd.key] ?? r?.[fd.id];
             if (DERIVED.has(fd.key)) continue;
-            // Over a range each figure is read the way its own rule says:
-            // sales add up, a percentage averages, a follower count is
-            // whatever it last stood at.
-            const rule = (fd.rollup || (NUM.has(fd.field_type) ? "sum" : "none")) as string;
-            if (rule !== "none" && (NUM.has(fd.field_type) || fd.field_type === "percent")) {
+            if (NUM.has(fd.field_type)) {
               const n = Number(v);
               if (v === "" || v == null || isNaN(n)) continue;
-              const e = nums.get(fd.key) || { label: fd.label, total: 0, count: 0, last: 0, rule };
-              if (rule === "last") {
-                // Later day wins; same day, later report wins.
-                if (String(s.report_date) >= String(e.lastDay || "")) {
-                  e.last = n; e.lastDay = String(s.report_date);
-                }
-              } else {
-                e.total += n;
-              }
-              e.count += 1;
-              nums.set(fd.key, e);
+              const e = nums.get(fd.key) || { label: fd.label, total: 0 };
+              e.total += n; nums.set(fd.key, e);
             } else if (TXT.has(fd.field_type)) {
               const t = String(v ?? "").trim();
               if (EMPTY.has(t.toLowerCase())) continue;
               const e = texts.get(fd.key) || { label: fd.label, items: [] };
               e.items.push({ who: who(s), text: t }); texts.set(fd.key, e);
+            } else if (PIC.has(fd.field_type)) {
+              const t = String(v ?? "").trim();
+              if (!t) continue;
+              const e = pics.get(fd.key) || { label: fd.label, items: [] };
+              e.items.push({ who: who(s), path: t }); pics.set(fd.key, e);
             }
           }
         }
       }
     }
     const tgt = nums.get("daily_target")?.total, act = nums.get("actual_sale")?.total;
-    const shown = [...nums.values()].map((e) => ({
-      label: e.label,
-      total:
-        e.rule === "avg" ? (e.count ? e.total / e.count : 0)
-        : e.rule === "last" ? e.last
-        : e.total,
-      rule: e.rule,
-    }));
-    return { nums: shown, texts: [...texts.values()], pct: tgt ? (act || 0) / tgt * 100 : null };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subs, struct, stores, forms, range]);
+    return {
+      nums: [...nums.values()], texts: [...texts.values()], pics: [...pics.values()],
+      pct: tgt ? (act || 0) / tgt * 100 : null,
+    };
+  };
+
+  const summary = useMemo(() => rollUp(staffSubs), // eslint-disable-line react-hooks/exhaustive-deps
+    [subs, struct, stores, forms, range]);
+  const headSummary = useMemo(() => rollUp(consSubs), // eslint-disable-line react-hooks/exhaustive-deps
+    [subs, struct, stores, forms, range]);
 
   // Wholesale invoices are far larger than showroom ones, so one blended
   // average invoice value tells nobody anything. Each channel keeps its own.
@@ -373,7 +383,58 @@ export default function DeptPage() {
             </ul>
           </div>
         ))}
+
+        {summary.pics.map((p) => (
+          <div key={p.label} className="mt-4">
+            <div className="text-xs font-medium text-slate-500 mb-1">{p.label}</div>
+            <div className="flex flex-wrap gap-2">
+              {p.items.map((i, k) => <Shot key={k} path={i.path} who={i.who} />)}
+            </div>
+          </div>
+        ))}
       </div>
+
+      {/* What the department heads filed. It was being collected and then
+          thrown away, so this page read as though they had written nothing. */}
+      {(headSummary.nums.length > 0 || headSummary.texts.length > 0 || headSummary.pics.length > 0) && (
+        <div className="bg-white border border-slate-200 rounded-xl p-4 mb-4">
+          <h2 className="text-sm font-semibold mb-1">Manager</h2>
+          <p className="text-xs text-slate-400 mb-3">
+            {consSubs.length} {consSubs.length === 1 ? "report" : "reports"}
+          </p>
+
+          {headSummary.nums.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-2">
+              {headSummary.nums.map((n) => (
+                <div key={n.label}>
+                  <div className="text-xs text-slate-500">{n.label}</div>
+                  <div className="text-base font-semibold">{fmt(n.total)}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {headSummary.texts.map((t) => (
+            <div key={t.label} className="mt-3">
+              <div className="text-xs font-medium text-slate-500 mb-1">{t.label}</div>
+              <ul className="space-y-1 text-sm">
+                {t.items.map((i, k) => (
+                  <li key={k}><span className="text-slate-400 mr-2">{i.who}</span>{i.text}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
+
+          {headSummary.pics.map((p) => (
+            <div key={p.label} className="mt-3">
+              <div className="text-xs font-medium text-slate-500 mb-1">{p.label}</div>
+              <div className="flex flex-wrap gap-2">
+                {p.items.map((i, k) => <Shot key={k} path={i.path} who={i.who} />)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
         {[...subs.filter((x) => isHead(x.form_id)), ...subs.filter((x) => !isHead(x.form_id))].map((s) => (
