@@ -346,8 +346,16 @@ function FileField({
       setUrl(value);
       return;
     }
+    // The error used to be thrown away, so a photo that could not be
+    // signed showed as nothing at all — no picture and no reason. Saying
+    // so is the difference between "the upload lost my photo" and "ask
+    // whoever runs the database".
     supabase.storage.from("report-photos").createSignedUrl(value, 3600)
-      .then(({ data }) => { if (alive) setUrl(data?.signedUrl || ""); });
+      .then(({ data, error }) => {
+        if (!alive) return;
+        if (error) { setErr(error.message); setUrl(""); return; }
+        setUrl(data?.signedUrl || "");
+      });
     return () => { alive = false; };
   }, [value]);
 
@@ -369,7 +377,13 @@ function FileField({
   }
 
   if (readOnly) {
-    if (!url) return <span className="text-sm text-slate-400">-</span>;
+    if (!url) {
+      return (
+        <span className={`text-sm ${err ? "text-red-600" : "text-slate-400"}`}>
+          {err ? `\u26a0\ufe0f ${err}` : value ? "\u23f3" : "-"}
+        </span>
+      );
+    }
     return image ? (
       // eslint-disable-next-line @next/next/no-img-element
       <a href={url} target="_blank" rel="noreferrer">
