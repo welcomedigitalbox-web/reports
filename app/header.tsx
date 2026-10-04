@@ -14,11 +14,19 @@ export default function Header() {
   // Directors file nothing by default — unless a form is addressed to them by
   // name or role, like the operations report the owner signs off.
   const [filesOwn, setFilesOwn] = useStateHR(false);
+  // Departments this person may read without belonging to them — the
+  // marketing AM reading the sales reports, say. Granted in report_viewers.
+  const [reads, setReads] = useStateHR<string[]>([]);
   // How many issues other departments have left for this person, unanswered.
   const [openIssues, setOpenIssues] = useStateHR(0);
   useEffectHR(() => {
     if (!profile?.id) return;
     sbHR.rpc("my_direct_report_count").then(({ data }) => setHasReports(Number(data || 0) > 0));
+    sbHR.from("report_viewers").select("department").eq("email", profile.email)
+      .then(({ data, error }) => {
+        if (error) return; // table not created yet
+        setReads(((data as { department: string }[]) || []).map((r) => r.department));
+      });
     if (isDirector(profile.role)) {
       sbHR.from("report_forms").select("*").eq("active", true).then(({ data }) => {
         const mine = ((data as { allowed_emails?: string[] | null }[]) || [])
@@ -47,6 +55,10 @@ export default function Header() {
     ...(profile.email === "admin@edu.com" ? [{ href: "/usage", label: "AI Usage" }] : []),
     ...(isDirector(profile.role) || profile.email === "itadmin@edu.com"
       ? [{ href: "/filing", label: "Filing" }] : []),
+    ...(isDirector(profile.role) ? [] : reads.map((d) => ({
+      href: `/dept/${d}`,
+      label: `${d === "sale" ? "Sales" : d.charAt(0).toUpperCase() + d.slice(1)} reports`,
+    }))),
     { href: "/issues", label: "Issues" },
   ];
 

@@ -71,9 +71,18 @@ export default function DeptPage() {
   const [stores, setStores] = useState<Record<string, string>>({});
   const [kinds, setKinds] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  // Not a director, but granted this department to read (report_viewers).
+  const [viewer, setViewer] = useState<boolean | null>(null);
   const [parts, setParts] = useState<{ submission_id: string; email: string }[]>([]);
 
   useEffect(() => { if (profile) load(); /* eslint-disable-next-line */ }, [profile?.id, date, dateTo, name]);
+
+  useEffect(() => {
+    if (!profile || isDirector(profile.role)) return;
+    supabase.from("report_viewers").select("department")
+      .eq("email", profile.email).eq("department", name).maybeSingle()
+      .then(({ data, error }) => setViewer(!error && !!data));
+  }, [profile?.id, name]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function load() {
     setLoading(true);
@@ -299,11 +308,17 @@ export default function DeptPage() {
   const expected = filers.length * days;
 
   if (authLoading || loading) return <div className="pt-16 text-center text-sm text-slate-400">…</div>;
-  if (!profile || !isDirector(profile.role)) return null;
+  if (!profile) return null;
+  if (!isDirector(profile.role)) {
+    if (viewer === null) return <div className="pt-16 text-center text-sm text-slate-400">…</div>;
+    if (!viewer) return null;
+  }
 
   return (
     <div className="max-w-4xl mx-auto pt-6">
-      <button onClick={() => router.push("/dashboard")} className="text-sm text-blue-600 mb-4">← Dashboard</button>
+      {isDirector(profile.role) && (
+        <button onClick={() => router.push("/dashboard")} className="text-sm text-blue-600 mb-4">← Dashboard</button>
+      )}
       <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-xl font-semibold capitalize">
