@@ -11,12 +11,23 @@ export default function Header() {
   const pathname = usePathname();
   const { profile, signOut } = useAuth();
   const [hasReports, setHasReports] = useStateHR(false);
+  // Directors file nothing by default — unless a form is addressed to them by
+  // name or role, like the operations report the owner signs off.
+  const [filesOwn, setFilesOwn] = useStateHR(false);
   // How many issues other departments have left for this person, unanswered.
   const [openIssues, setOpenIssues] = useStateHR(0);
   useEffectHR(() => {
     if (!profile?.id) return;
     sbHR.rpc("my_direct_report_count").then(({ data }) => setHasReports(Number(data || 0) > 0));
-  }, [profile?.id]);
+    if (isDirector(profile.role)) {
+      sbHR.from("report_forms").select("*").eq("active", true).then(({ data }) => {
+        const mine = ((data as { allowed_emails?: string[] | null; allowed_roles?: string[] | null }[]) || [])
+          .some((f) => (f.allowed_emails || []).includes(profile.email)
+                    || (f.allowed_roles || []).includes(profile.role));
+        setFilesOwn(mine);
+      });
+    }
+  }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Re-read on every page change: the count is stale the moment someone marks
   // one done, and a badge that lies is worse than no badge.
@@ -30,7 +41,7 @@ export default function Header() {
   // Three audiences, three doors. Everyone files; heads review what their
   // department filed; the owner reads what the heads have signed.
   const tabs = [
-    ...(isDirector(profile.role) ? [] : [{ href: "/", label: "My Reports" }]),
+    ...(isDirector(profile.role) && !filesOwn ? [] : [{ href: "/", label: "My Reports" }]),
     ...(isManagerTier(profile.role) || hasReports ? [{ href: "/review", label: "Review" }] : []),
         ...(isManagerTier(profile.role) || isDirector(profile.role) ? [{ href: "/targets", label: "Target" }] : []),
     ...(isDirector(profile.role) ? [{ href: "/dashboard", label: "Dashboard" }, { href: "/ask", label: "Ask AI" }] : []),

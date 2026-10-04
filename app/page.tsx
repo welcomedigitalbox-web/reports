@@ -26,10 +26,8 @@ export default function HomePage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (isDirector(profile?.role)) {
-      router.replace("/dashboard");
-      return;
-    }
+    // A director lands on the dashboard unless a form is addressed to them;
+    // load() decides, once it knows.
     if (profile) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id]);
@@ -47,13 +45,21 @@ export default function HomePage() {
     // A form can be addressed to particular people as well as to roles —
     // two staff on the same role each file their own report, and a role list
     // cannot tell them apart.
+    const director = isDirector(profile?.role);
     const forRole = ((f as ReportForm[]) || []).filter((x) => {
       const y = x as ReportForm & { allowed_roles?: string[]; allowed_emails?: string[] };
       const emails = y.allowed_emails;
       if (emails?.length) return emails.includes(profile!.email);
       const roles = y.allowed_roles;
+      // A director sees every department's forms to read, but files only the
+      // ones addressed to them; an open form is the department's to fill.
+      if (director) return !!roles?.length && roles.includes(profile!.role);
       return !roles?.length || roles.includes(profile!.role);
     });
+    if (director && forRole.length === 0) {
+      router.replace("/dashboard");
+      return;
+    }
 
     const { data: s } = await supabase
       .from("report_submissions")
