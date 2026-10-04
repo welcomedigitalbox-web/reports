@@ -443,8 +443,12 @@ export default function ReportPage() {
           const a = answers[f.key];
           return a !== undefined && a !== null && a !== "";
         });
-        // A private section never leaves the person it is addressed to.
-        if (!mineToFill && (s.private_to_route || !answered)) return null;
+        // A private section never leaves the person it is addressed to —
+        // except upward. The manager's own lines are filed for the owner and
+        // the heads to read, so anyone at manager tier or above sees a private
+        // section once it has been answered.
+        const seesPrivate = isManagerTier(profile?.role);
+        if (!mineToFill && (!answered || (s.private_to_route && !seesPrivate))) return null;
         return (
           <SectionBlock
             key={s.id}

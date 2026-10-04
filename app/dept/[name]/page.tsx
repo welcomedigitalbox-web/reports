@@ -70,6 +70,7 @@ export default function DeptPage() {
   const [stores, setStores] = useState<Record<string, string>>({});
   const [kinds, setKinds] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [parts, setParts] = useState<{ submission_id: string; email: string }[]>([]);
 
   useEffect(() => { if (profile) load(); /* eslint-disable-next-line */ }, [profile?.id, date, dateTo, name]);
 
@@ -101,6 +102,14 @@ export default function DeptPage() {
     for (const x of secs.sort((a, b) => a.sort_order - b.sort_order))
       (map[x.form_id] ||= []).push({ ...x, fields: bySec.get(x.id) || [] });
 
+    // On a shared form one report holds several people's parts; who filed
+    // is in the parts table, not in who happened to open the report first.
+    const subIds = ((s as Submission[]) || []).map((x) => x.id);
+    const { data: pt } = subIds.length
+      ? await supabase.from("report_submission_parts").select("submission_id,email").in("submission_id", subIds)
+      : { data: [] };
+    setParts((pt as { submission_id: string; email: string }[]) || []);
+
     setForms(fs); setSubs((s as Submission[]) || []); setPeople((p as P[]) || []);
     setStruct(map);
     setStores(Object.fromEntries(((st as { id: string; name: string }[]) || []).map((x) => [x.id, x.name])));
@@ -122,8 +131,24 @@ export default function DeptPage() {
   };
   const staffSubs = subs.filter((s) => !isCons(s.form_id));
   const consSubs = subs.filter((s) => isCons(s.form_id));
-  const who = (s: Submission) => {
-    const n = (s.store_id && stores[s.store_id]) || s.created_by.split("@")[0];
+  const isShared = (fid: string) => !!forms.find((f) => f.id === fid)?.is_shared;
+  // On a shared report each section belongs to the person (or role) it is
+  // routed to; crediting all of it to whoever opened the report first put
+  // three people's work under one name.
+  const sectionOwner = (s: Submission, sec?: FormSection): string | null => {
+    if (!sec || !isShared(s.form_id)) return null;
+    if (sec.route_emails?.length) return sec.route_emails.map((e) => e.split("@")[0]).join(", ");
+    if (sec.route_roles?.length) {
+      const holders = people.filter((p) => sec.route_roles!.includes(p.role));
+      const filed = holders.filter((p) => parts.some((x) => x.submission_id === s.id && x.email === p.email));
+      const pick = filed.length ? filed : holders;
+      if (pick.length) return pick.map((p) => p.email.split("@")[0]).join(", ");
+      return sec.route_roles.join(", ");
+    }
+    return null;
+  };
+  const who = (s: Submission, sec?: FormSection) => {
+    const n = sectionOwner(s, sec) || (s.store_id && stores[s.store_id]) || s.created_by.split("@")[0];
     // Over a range, "who said it" is not enough — when matters too.
     return range ? `${n} · ${String(s.report_date).slice(5)}` : n;
   };
@@ -152,12 +177,12 @@ export default function DeptPage() {
               const t = String(v ?? "").trim();
               if (EMPTY.has(t.toLowerCase())) continue;
               const e = texts.get(fd.key) || { label: fd.label, items: [] };
-              e.items.push({ who: who(s), text: t }); texts.set(fd.key, e);
+              e.items.push({ who: who(s, sec), text: t }); texts.set(fd.key, e);
             } else if (PIC.has(fd.field_type)) {
               const t = String(v ?? "").trim();
               if (!t) continue;
               const e = pics.get(fd.key) || { label: fd.label, items: [] };
-              e.items.push({ who: who(s), path: t }); pics.set(fd.key, e);
+              e.items.push({ who: who(s, sec), path: t }); pics.set(fd.key, e);
             }
           }
         }
@@ -244,7 +269,22 @@ export default function DeptPage() {
     { target: 0, actual: 0, invoices: 0 }), [channels]);
 
   const filers = people.filter((p) => !p.is_dept_head && !isManagerTier(p.role));
+  // Filed means: opened a report of their own, or filed their part of a
+  // shared one, or wrote in a section addressed to them by name.
   const filedBy = new Set(staffSubs.map((s) => s.created_by));
+  for (const x of parts) if (staffSubs.some((s) => s.id === x.submission_id)) filedBy.add(x.email);
+  for (const s of staffSubs) {
+    if (!isShared(s.form_id)) continue;
+    const a = (s.answers || {}) as Record<string, unknown>;
+    for (const sec of struct[s.form_id] || []) {
+      if (!sec.route_emails?.length) continue;
+      const wrote = sec.fields.some((f) => {
+        const v = a[f.key] ?? a[f.id];
+        return v != null && String(v).trim() !== "";
+      }) || (sec.is_table && Array.isArray(a[sec.id]) && (a[sec.id] as unknown[]).length > 0);
+      if (wrote) sec.route_emails.forEach((e) => filedBy.add(e));
+    }
+  }
   const notFiled = filers.filter((p) => !filedBy.has(p.email));
 
   const days = range
