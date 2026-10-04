@@ -6,6 +6,7 @@ import {
   supabase, type ReportForm, type Submission, type FormSection, type FormField,
 } from "@/lib/supabase";
 import { useAuth, isDirector, isManagerTier } from "../../auth-context";
+import { photoPaths } from "../../section-block";
 
 type P = { id: string; email: string; role: string; store_id: string | null; is_dept_head: boolean };
 
@@ -179,10 +180,11 @@ export default function DeptPage() {
               const e = texts.get(fd.key) || { label: fd.label, items: [] };
               e.items.push({ who: who(s, sec), text: t }); texts.set(fd.key, e);
             } else if (PIC.has(fd.field_type)) {
-              const t = String(v ?? "").trim();
-              if (!t) continue;
+              const list = photoPaths(v);
+              if (!list.length) continue;
               const e = pics.get(fd.key) || { label: fd.label, items: [] };
-              e.items.push({ who: who(s, sec), path: t }); pics.set(fd.key, e);
+              for (const path of list) e.items.push({ who: who(s, sec), path });
+              pics.set(fd.key, e);
             }
           }
         }

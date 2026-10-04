@@ -441,6 +441,7 @@ export default function ReportPage() {
         const locked = routed ? !mineToFill || (readOnly && !canReview) : readOnly;
         const answered = s.fields.some((f) => {
           const a = answers[f.key];
+          if (Array.isArray(a)) return a.length > 0;
           return a !== undefined && a !== null && a !== "";
         });
         // A private section never leaves the person it is addressed to —
@@ -624,7 +625,9 @@ export default function ReportPage() {
                             <div key={f.key} className="flex gap-4 py-1.5">
                               <dt className="text-slate-500 w-1/2 shrink-0">{f.label}</dt>
                               <dd className="text-slate-900 break-words">
-                                {String(answers[f.key])}
+                                {Array.isArray(answers[f.key])
+                                  ? `${(answers[f.key] as unknown[]).length} photo(s)`
+                                  : String(answers[f.key])}
                               </dd>
                             </div>
                           ))}
