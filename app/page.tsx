@@ -51,9 +51,10 @@ export default function HomePage() {
       const emails = y.allowed_emails;
       if (emails?.length) return emails.includes(profile!.email);
       const roles = y.allowed_roles;
-      // A director sees every department's forms to read, but files only the
-      // ones addressed to them; an open form is the department's to fill.
-      if (director) return !!roles?.length && roles.includes(profile!.role);
+      // A director reads every department's forms but files only the ones
+      // addressed to them by name. A role list is too broad here: the
+      // department forms already name the management roles that may fill them.
+      if (director) return false;
       return !roles?.length || roles.includes(profile!.role);
     });
     if (director && forRole.length === 0) {

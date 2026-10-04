@@ -21,9 +21,8 @@ export default function Header() {
     sbHR.rpc("my_direct_report_count").then(({ data }) => setHasReports(Number(data || 0) > 0));
     if (isDirector(profile.role)) {
       sbHR.from("report_forms").select("*").eq("active", true).then(({ data }) => {
-        const mine = ((data as { allowed_emails?: string[] | null; allowed_roles?: string[] | null }[]) || [])
-          .some((f) => (f.allowed_emails || []).includes(profile.email)
-                    || (f.allowed_roles || []).includes(profile.role));
+        const mine = ((data as { allowed_emails?: string[] | null }[]) || [])
+          .some((f) => (f.allowed_emails || []).includes(profile.email));
         setFilesOwn(mine);
       });
     }
