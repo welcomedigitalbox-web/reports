@@ -11,6 +11,8 @@ type Parsed = {
 const KIND_LABEL: Record<string, string> = {
   cash_daily: "Cashbook", sale_income_daily: "Daily Sale & Income",
   purchase_payable_daily: "Purchase & Payable",
+  inventory_daily: "Inventory Management Report",
+  inventory_monthly: "Monthly Closing Stock",
 };
 const fmt = (n: unknown) => Number(n || 0).toLocaleString();
 
