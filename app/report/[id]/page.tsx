@@ -450,7 +450,14 @@ export default function ReportPage() {
         const routed = !!(
           s.route_roles?.length || s.route_departments?.length || s.route_emails?.length
         );
-        const locked = routed ? !mineToFill || (readOnly && !canReview) : readOnly;
+        // Once the reviewer has filed their own part the section closes,
+        // the same way the executive's sections close when they file.
+        // A review that stays editable after the report is signed is not a
+        // review — it is a draft anybody can revisit, and the approval
+        // underneath it then refers to words that may since have changed.
+        const locked = routed
+          ? !mineToFill || myPartFiled || (readOnly && !canReview)
+          : readOnly;
         const answered = s.fields.some((f) => {
           const a = answers[f.key];
           return a !== undefined && a !== null && a !== "";
