@@ -475,8 +475,12 @@ export default function SectionBlock({
   const canPull = !!sectionKind;
   const compactTable =
     /kpi tracker/i.test(section.title || "") ||
-    // Anything long enough that the person is reading rather than typing.
-    (section.is_table && rows.length > 5);
+    // Long enough that the person is reading rather than typing — but only
+    // when the row will fit across the screen. A section of paragraphs is
+    // unreadable squeezed into columns, however many rows it has, so those
+    // keep a block per row.
+    (section.is_table && rows.length > 5 &&
+      section.fields.filter((f) => f.field_type === "textarea").length <= 2);
   // A checklist that is the same every day — every shop against the same few
   // things — belongs in a grid, not in rows the person has to add one at a
   // time. The title says so, and the first column's options say which rows.
