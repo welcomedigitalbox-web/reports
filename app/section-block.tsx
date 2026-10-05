@@ -778,7 +778,7 @@ export default function SectionBlock({
                     <button key={sh} type="button" onClick={() => setShopFilter(sh)}
                       className={`px-2.5 py-1 rounded-lg text-xs ${
                         shopFilter === sh ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600"}`}>
-                      {(stores && stores[sh]) || sh} ({n})
+                      {stores?.find((st) => st.id === sh)?.name || sh} ({n})
                     </button>
                   );
                 })}
