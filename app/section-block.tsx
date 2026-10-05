@@ -418,6 +418,30 @@ function FileField({
   );
 }
 
+// A photo field holds a storage path. Over the life of these forms it has
+// also held several at once — as a JSON array when the form allowed more
+// than one, and as a comma- or newline-separated list when somebody pasted
+// them in. Anything reading photos back has to cope with all three, so the
+// coping lives here rather than in each page that shows them.
+export function photoPaths(v: unknown): string[] {
+  if (v == null) return [];
+  if (Array.isArray(v)) return v.flatMap(photoPaths);
+  const t = String(v).trim();
+  if (!t) return [];
+  if (t.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(t);
+      if (Array.isArray(parsed)) return parsed.flatMap(photoPaths);
+    } catch {
+      // Not JSON after all; fall through and treat it as plain text.
+    }
+  }
+  return t
+    .split(/[\n,]+/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
 export default function SectionBlock({
   section, answers, onChange, readOnly, stores, people, defaultStore,
 }: Props) {
