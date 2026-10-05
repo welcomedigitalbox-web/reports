@@ -6,7 +6,22 @@ type Parsed = {
   kind: string; date: string; available: string[];
   sections: Record<string, Record<string, unknown>[]>;
   fixed: Record<string, unknown>;
+  preview: { columns: string[]; rows: (string | number)[][] } | null;
   unknown: { kind: string; raw: string }[];
+};
+
+// The workbook's own words for the summary keys, so the preview reads like
+// the report rather than like a database.
+const FIXED_LABEL: Record<string, string> = {
+  stores_counted: "ဆိုင်", total_sku: "SKU", system_qty: "စနစ် ပမာဏ",
+  ground_qty: "အမှန် ပမာဏ", match_sku: "ကိုက်သည့် SKU", diff_sku: "ကွာသည့် SKU",
+  diff_sku_filed: "စာရင်းသွင်းမည်", short_value: "လိုနေသော တန်ဖိုး",
+  over_value: "ပိုနေသော တန်ဖိုး", net_value: "ကွာခြား (စုစုပေါင်း)",
+  negative_sku: "အနုတ် လက်ကျန် SKU", accuracy_pct: "တိကျမှု %",
+  closing_qty: "လကုန် လက်ကျန်", closing_value: "ပိတ်သိမ်း တန်ဖိုး",
+  negative_value: "အနုတ် လက်ကျန် တန်ဖိုး", unbalanced_sku: "ရွေ့လျားမှု မကိုက်",
+  main_opening: "Main ဖွင့်လက်ကျန်", petty_opening: "Petty ဖွင့်လက်ကျန်",
+  petty_transfer_in: "Petty ဝင်ငွေ",
 };
 
 // The forms that are filled from a workbook rather than typed. Naming them
@@ -156,28 +171,80 @@ export default function ExcelImport({
             )}
           </div>
 
-          {/* What was read, before anything is written into the form. */}
-          {Object.keys(p.fixed).length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
-              {Object.entries(p.fixed).map(([k, v]) => (
-                <div key={k} className="bg-slate-50 rounded-lg px-3 py-2">
-                  <div className="text-[11px] text-slate-500">{k.replace(/_/g, " ")}</div>
-                  <div className="text-sm font-medium">{fmt(v)}</div>
-                </div>
-              ))}
+          {/* Shop by shop, the way the workbook is organised. */}
+          {p.preview && p.preview.rows.length > 0 && (
+            <div className="overflow-x-auto mb-4 border border-slate-200 rounded-lg">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-slate-500">
+                  <tr>
+                    {p.preview.columns.map((c, i) => (
+                      <th key={c} className={`px-3 py-2 font-medium ${i ? "text-right" : "text-left"}`}>
+                        {c}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {p.preview.rows.map((r, n) => (
+                    <tr key={n} className="border-t border-slate-100">
+                      {r.map((v, i) => (
+                        <td key={i} className={`px-3 py-2 ${i ? "text-right tabular-nums" : "font-medium"}`}>
+                          {typeof v === "number" ? fmt(v) : v}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-slate-50 border-t border-slate-200">
+                  <tr>
+                    {p.preview.columns.map((c, i) => (
+                      <td key={c} className={`px-3 py-2 font-semibold ${i ? "text-right tabular-nums" : ""}`}>
+                        {i === 0
+                          ? "စုစုပေါင်း"
+                          : /%/.test(c)
+                          ? ""
+                          : fmt(p.preview!.rows.reduce((a, r) => a + Number(r[i] || 0), 0))}
+                      </td>
+                    ))}
+                  </tr>
+                </tfoot>
+              </table>
             </div>
           )}
 
-          {Object.entries(p.sections).map(([title, rows]) => (
-            <div key={title} className="flex justify-between text-sm py-1">
-              <span className={sectionIds[title] ? "" : "text-red-500"}>
-                {title}{!sectionIds[title] && " (section ရှာမတွေ့)"}
-              </span>
-              <span className="text-slate-500">
-                {rows.length} row{money(rows) ? ` · ${fmt(money(rows))}` : ""}
-              </span>
+          {/* The whole-report figures, as a list of pairs rather than a
+              wall of boxes. */}
+          {Object.keys(p.fixed).length > 0 && (
+            <div className="overflow-hidden border border-slate-200 rounded-lg mb-3">
+              <table className="w-full text-sm">
+                <tbody>
+                  {Object.entries(p.fixed).map(([k, v], i) => (
+                    <tr key={k} className={i ? "border-t border-slate-100" : ""}>
+                      <td className="px-3 py-1.5 text-slate-500">{FIXED_LABEL[k] || k.replace(/_/g, " ")}</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums font-medium">{fmt(v)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          ))}
+          )}
+
+          <div className="overflow-hidden border border-slate-200 rounded-lg">
+            <table className="w-full text-sm">
+              <tbody>
+                {Object.entries(p.sections).map(([title, rows], i) => (
+                  <tr key={title} className={i ? "border-t border-slate-100" : ""}>
+                    <td className={`px-3 py-1.5 ${sectionIds[title] ? "" : "text-red-500"}`}>
+                      {title}{!sectionIds[title] && " (section ရှာမတွေ့)"}
+                    </td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-500 whitespace-nowrap">
+                      {rows.length} row{money(rows) ? ` · ${fmt(money(rows))}` : ""}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
           {p.unknown.length > 0 && (
             <div className="mt-3 rounded-lg bg-amber-50 p-3">

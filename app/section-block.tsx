@@ -305,12 +305,10 @@ function Field({
 
     case "image":
     case "photo":
-      return <PhotoList value={v} readOnly={readOnly} onChange={onChange} />;
-
     case "file":
       return (
         <FileField value={String(v)} readOnly={readOnly} onChange={onChange}
-                   image={false} />
+                   image={field.field_type !== "file"} />
       );
 
     default:
@@ -420,95 +418,6 @@ function FileField({
   );
 }
 
-/**
- * Several photos in one box. A day's incident is rarely one picture — the
- * shelf, the label, the damage — so a photo field holds a list. A value saved
- * before this was a single path; it reads as a list of one, so old reports
- * keep their picture.
- */
-export function photoPaths(v: unknown): string[] {
-  if (Array.isArray(v)) return v.map(String).filter(Boolean);
-  const s = String(v ?? "").trim();
-  if (!s) return [];
-  if (s.startsWith("[")) {
-    try {
-      const a = JSON.parse(s);
-      if (Array.isArray(a)) return a.map(String).filter(Boolean);
-    } catch { /* not a list */ }
-  }
-  return [s];
-}
-
-function PhotoList({
-  value, readOnly, onChange,
-}: {
-  value: unknown;
-  readOnly?: boolean;
-  onChange: (v: unknown) => void;
-}) {
-  const paths = photoPaths(value);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-
-  async function upload(files: FileList) {
-    setErr("");
-    const added: string[] = [];
-    setBusy(true);
-    for (const file of Array.from(files)) {
-      if (file.size > 10 * 1024 * 1024) { setErr(`${file.name} is larger than 10MB`); continue; }
-      const ext = file.name.split(".").pop() || "jpg";
-      const path = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${ext}`;
-      const { error } = await supabase.storage.from("report-photos").upload(path, file);
-      if (error) { setErr(error.message); continue; }
-      added.push(path);
-    }
-    setBusy(false);
-    if (added.length) onChange([...paths, ...added]);
-  }
-
-  if (readOnly && paths.length === 0) return <span className="text-sm text-slate-400">-</span>;
-
-  return (
-    <div className="space-y-2">
-      {paths.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {paths.map((p, i) => (
-            <div key={p + i} className="relative">
-              <FileField value={p} readOnly onChange={() => {}} image />
-              {!readOnly && (
-                <button
-                  type="button"
-                  onClick={() => onChange(paths.filter((_, j) => j !== i))}
-                  className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-white border border-slate-200 text-xs text-red-600 leading-none"
-                  aria-label="remove photo"
-                >
-                  ×
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-      {!readOnly && (
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-blue-600 cursor-pointer">
-            + {paths.length ? "Add more photos" : "Add photos"} · ဓာတ်ပုံထည့်ရန်
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(e) => { if (e.target.files?.length) upload(e.target.files); e.target.value = ""; }}
-            />
-          </label>
-          {busy && <span className="text-xs text-slate-400">uploading…</span>}
-        </div>
-      )}
-      {err && <p className="text-xs text-red-600">{err}</p>}
-    </div>
-  );
-}
-
 export default function SectionBlock({
   section, answers, onChange, readOnly, stores, people, defaultStore,
 }: Props) {
@@ -540,7 +449,10 @@ export default function SectionBlock({
     ? "kpi"
     : "";
   const canPull = !!sectionKind;
-  const compactTable = /kpi tracker/i.test(section.title || "");
+  const compactTable =
+    /kpi tracker/i.test(section.title || "") ||
+    // Anything long enough that the person is reading rather than typing.
+    (section.is_table && rows.length > 5);
   // A checklist that is the same every day — every shop against the same few
   // things — belongs in a grid, not in rows the person has to add one at a
   // time. The title says so, and the first column's options say which rows.
@@ -684,6 +596,11 @@ export default function SectionBlock({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gridTable, readOnly, rows.length]);
 
+  // Which shop the person is looking at. Kept as a label, not an index,
+  // so it survives the rows being re-read from a new file.
+  const shopField = section.fields.find((f) => f.field_type === "store");
+  const [shopFilter, setShopFilter] = useState("");
+
   function setRow(i: number, key: string, value: unknown) {
     const next = rows.map((r, idx) =>
       idx === i ? recompute({ ...r, [key]: value }) : r
@@ -818,6 +735,33 @@ export default function SectionBlock({
           {rows.length === 0 && (
             <p className="text-sm text-slate-400 mb-3">No rows yet</p>
           )}
+
+          {/* Shop by shop, because that is how the count was taken and how
+              it will be answered for. */}
+          {shopField && rows.length > 1 && (() => {
+            const shops = [...new Set(rows.map((r) => String(r[shopField.key] ?? "")).filter(Boolean))];
+            if (shops.length < 2) return null;
+            return (
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                <button type="button" onClick={() => setShopFilter("")}
+                  className={`px-2.5 py-1 rounded-lg text-xs ${
+                    shopFilter === "" ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600"}`}>
+                  အားလုံး ({rows.length})
+                </button>
+                {shops.map((sh) => {
+                  const n = rows.filter((r) => String(r[shopField.key] ?? "") === sh).length;
+                  return (
+                    <button key={sh} type="button" onClick={() => setShopFilter(sh)}
+                      className={`px-2.5 py-1 rounded-lg text-xs ${
+                        shopFilter === sh ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600"}`}>
+                      {(stores && stores[sh]) || sh} ({n})
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
           {rows.length > 0 && (
             <table className="w-full text-sm">
               <thead>
@@ -829,7 +773,12 @@ export default function SectionBlock({
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row, i) => (
+                {rows
+                  .map((row, i) => ({ row, i }))
+                  .filter(({ row }) =>
+                    !shopFilter || !shopField ||
+                    String(row[shopField.key] ?? "") === shopFilter)
+                  .map(({ row, i }) => (
                   <tr key={i} className="border-b border-slate-100 last:border-0 align-top">
                     {section.fields.map((f, fi) => (
                       <td key={f.id} className="py-1.5 pr-2 min-w-[7rem]">

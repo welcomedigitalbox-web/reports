@@ -170,6 +170,10 @@ export async function POST(req: NextRequest) {
 
   const sections: Record<string, unknown[]> = {};
   const fixed: Record<string, unknown> = {};
+  // What was read, shop by shop, as a table. The workbook keeps a sheet
+  // per shop, so this is the shape the person already has in their head —
+  // a row of boxes is not.
+  let preview: { columns: string[]; rows: (string | number)[][] } | null = null;
   let kind = "";
   let usedDate = wantDate;
   let available: string[] = [];
@@ -259,8 +263,10 @@ export async function POST(req: NextRequest) {
     kind = "inventory_daily";
     let sku = 0, sysQty = 0, grdQty = 0, matched = 0, short = 0, over = 0, neg = 0;
     const diffs: Record<string, unknown>[] = [];
+    const perShop: (string | number)[][] = [];
 
     for (const name of invSheets()) {
+      let sSku = 0, sSys = 0, sGrd = 0, sMatch = 0, sDiff = 0, sVal = 0;
       const g = grid(name);
       const h = headerRow(g, ["code", "qty"]);
       if (h < 0) continue;
@@ -277,17 +283,18 @@ export async function POST(req: NextRequest) {
         const price = c.price == null ? 0 : plain(g[r]?.[c.price]) ?? 0;
         if (sq == null && gq == null) continue;
 
-        sku++;
-        sysQty += sq ?? 0;
-        grdQty += gq ?? 0;
+        sku++; sSku++;
+        sysQty += sq ?? 0; sSys += sq ?? 0;
+        grdQty += gq ?? 0; sGrd += gq ?? 0;
         if ((sq ?? 0) < 0) neg++;
 
         // A blank Ground means nobody counted it, which is not the same
         // as counting zero. Those lines are left out of the difference.
         if (gq == null) continue;
         const d = (sq ?? 0) - gq;
-        if (d === 0) { matched++; continue; }
+        if (d === 0) { matched++; sMatch++; continue; }
         const value = d * price;
+        sDiff++; sVal += value;
         if (d > 0) short += value; else over += -value;
 
         diffs.push({
@@ -297,7 +304,18 @@ export async function POST(req: NextRequest) {
           root_cause: "", action_taken: "", status: "Open",
         });
       }
+
+      perShop.push([
+        branch, sSku, sSys, sGrd, sMatch, sDiff,
+        sMatch + sDiff ? Math.round((sMatch / (sMatch + sDiff)) * 1000) / 10 : 0,
+        Math.round(sVal),
+      ]);
     }
+
+    preview = {
+      columns: ["ဆိုင်", "SKU", "စနစ်", "အမှန်", "ကိုက်", "ကွာ", "တိကျမှု %", "ကွာခြား တန်ဖိုး"],
+      rows: perShop,
+    };
 
     fixed.stores_counted = invSheets().length;
     fixed.total_sku = sku;
@@ -434,6 +452,14 @@ export async function POST(req: NextRequest) {
     fixed.unbalanced_sku = tUnbal;
 
     byShop.sort((a, b) => String(a.location).localeCompare(String(b.location)));
+    preview = {
+      columns: ["ဆိုင်", "SKU", "လဆန်း", "ဝင်", "ထွက်", "လကုန်", "တန်ဖိုး", "အနုတ်"],
+      rows: byShop.map((r) => [
+        String(r.location), Number(r.total_sku), Number(r.opening_qty), Number(r.in_qty),
+        Number(r.out_qty), Number(r.closing_qty), Math.round(Number(r.closing_value)),
+        Number(r.negative_sku),
+      ]),
+    };
     problems.sort((a, b) => Math.abs(Number(b.gap_value)) - Math.abs(Number(a.gap_value)));
     sections["B. By shop"] = byShop;
     sections["C. To settle before closing"] = problems.slice(0, 200);
@@ -480,5 +506,5 @@ export async function POST(req: NextRequest) {
     return true;
   });
 
-  return NextResponse.json({ kind, date: usedDate, available, sections, fixed, unknown: newOnes });
+  return NextResponse.json({ kind, date: usedDate, available, sections, fixed, preview, unknown: newOnes });
 }
