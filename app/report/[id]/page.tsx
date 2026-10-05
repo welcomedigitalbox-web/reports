@@ -8,7 +8,7 @@ import {
   type FormSection, type ReportForm, type Submission, type Department,
 } from "@/lib/supabase";
 import { useAuth, isManagerTier, isDirector } from "../../auth-context";
-import ExcelImport from "@/components/ExcelImport";
+import ExcelImport, { IMPORT_FORMS } from "@/components/ExcelImport";
 import ReconCheck from "@/components/ReconCheck";
 import SectionBlock from "../../section-block";
 import ConsolidatedPanel from "../../consolidated-panel";
@@ -79,6 +79,10 @@ export default function ReportPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
+  // A report built from a workbook opens at the workbook. Until a file has
+  // been read — or the person says there isn't one — the empty form is not
+  // shown, because filling it by hand is not what this report is for.
+  const [skipImport, setSkipImport] = useState(false);
   const [toast, setToast] = useState("");
 
   // Rejecting, cancelling and requesting an edit all need a reason; one
@@ -177,6 +181,13 @@ export default function ReportPage() {
     !sub ||
     (sub.status !== "draft" && !stillMineToFill) ||
     (!mine && !isDirector(profile?.role));
+
+  const importable = Object.keys(IMPORT_FORMS).includes(sub?.form_id || "");
+  // Nothing typed yet and nothing read in: the file step stands alone.
+  const nothingFilled = Object.values(answers).every(
+    (v) => v == null || v === "" || (Array.isArray(v) && v.length === 0)
+  );
+  const gateOnImport = importable && !readOnly && !skipImport && nothingFilled;
 
   const canReview = useMemo(() => {
     if (!sub || !form || !profile) return false;
@@ -410,25 +421,26 @@ export default function ReportPage() {
         </div>
       )}
 
-      {FINANCE_FORMS.includes(sub.form_id) && (
-        <>
-          {!readOnly && (
-            <ExcelImport
-              formId={sub.form_id}
-              reportDate={sub.report_date}
-              sectionIds={Object.fromEntries(sections.map((x) => [x.title, x.id]))}
-              onApply={(vals) => {
-                const next = { ...answers, ...vals };
-                setAnswers(next);
-                setDirty(true);
-              }}
-            />
-          )}
-          <ReconCheck formId={sub.form_id} sections={sections} answers={answers} />
-        </>
+      {importable && !readOnly && (
+        <ExcelImport
+          formId={sub.form_id}
+          reportDate={sub.report_date}
+          sectionIds={Object.fromEntries(sections.map((x) => [x.title, x.id]))}
+          gate={gateOnImport}
+          onSkip={() => setSkipImport(true)}
+          onApply={(vals) => {
+            const next = { ...answers, ...vals };
+            setAnswers(next);
+            setDirty(true);
+            setSkipImport(true);
+          }}
+        />
+      )}
+      {FINANCE_FORMS.includes(sub.form_id) && !gateOnImport && (
+        <ReconCheck formId={sub.form_id} sections={sections} answers={answers} />
       )}
 
-      {sections.map((s) => {
+      {!gateOnImport && sections.map((s) => {
         // A routed section belongs to one role. Everyone still sees it once
         // it has been answered - that is the point of keeping the manager's
         // notes on the same report - but only its owner can type in it.
@@ -441,15 +453,10 @@ export default function ReportPage() {
         const locked = routed ? !mineToFill || (readOnly && !canReview) : readOnly;
         const answered = s.fields.some((f) => {
           const a = answers[f.key];
-          if (Array.isArray(a)) return a.length > 0;
           return a !== undefined && a !== null && a !== "";
         });
-        // A private section never leaves the person it is addressed to —
-        // except upward. The manager's own lines are filed for the owner and
-        // the heads to read, so anyone at manager tier or above sees a private
-        // section once it has been answered.
-        const seesPrivate = isManagerTier(profile?.role);
-        if (!mineToFill && (!answered || (s.private_to_route && !seesPrivate))) return null;
+        // A private section never leaves the person it is addressed to.
+        if (!mineToFill && (s.private_to_route || !answered)) return null;
         return (
           <SectionBlock
             key={s.id}
@@ -478,7 +485,7 @@ export default function ReportPage() {
 
       <div className="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 px-4 sm:px-6 py-3">
         <div className="max-w-4xl mx-auto flex flex-wrap gap-2 justify-end">
-          {(!readOnly || canReview) && (
+          {(!readOnly || canReview) && !gateOnImport && (
             <>
               <button
                 onClick={save}
@@ -625,9 +632,7 @@ export default function ReportPage() {
                             <div key={f.key} className="flex gap-4 py-1.5">
                               <dt className="text-slate-500 w-1/2 shrink-0">{f.label}</dt>
                               <dd className="text-slate-900 break-words">
-                                {Array.isArray(answers[f.key])
-                                  ? `${(answers[f.key] as unknown[]).length} photo(s)`
-                                  : String(answers[f.key])}
+                                {String(answers[f.key])}
                               </dd>
                             </div>
                           ))}
