@@ -7,6 +7,8 @@ type Parsed = {
   sections: Record<string, Record<string, unknown>[]>;
   fixed: Record<string, unknown>;
   preview: { columns: string[]; rows: (string | number)[][] } | null;
+  unreadable?: { sheet: string; row: number; code: string; name: string; qty: string; ground: string }[];
+  unreadableTotal?: number;
   unknown: { kind: string; raw: string }[];
 };
 
@@ -17,7 +19,8 @@ const FIXED_LABEL: Record<string, string> = {
   ground_qty: "အမှန် ပမာဏ", match_sku: "ကိုက်သည့် SKU", diff_sku: "ကွာသည့် SKU",
   diff_sku_filed: "စာရင်းသွင်းမည်", short_value: "လိုနေသော တန်ဖိုး",
   over_value: "ပိုနေသော တန်ဖိုး", net_value: "ကွာခြား (စုစုပေါင်း)",
-  negative_sku: "အနုတ် လက်ကျန် SKU", accuracy_pct: "တိကျမှု %",
+  negative_sku: "အနုတ် လက်ကျန် SKU", unreadable_sku: "ဖတ်မရသော စာကြောင်း",
+  accuracy_pct: "တိကျမှု %",
   closing_qty: "လကုန် လက်ကျန်", closing_value: "ပိတ်သိမ်း တန်ဖိုး",
   negative_value: "အနုတ် လက်ကျန် တန်ဖိုး", unbalanced_sku: "ရွေ့လျားမှု မကိုက်",
   main_opening: "Main ဖွင့်လက်ကျန်", petty_opening: "Petty ဖွင့်လက်ကျန်",
@@ -245,6 +248,53 @@ export default function ExcelImport({
               </tbody>
             </table>
           </div>
+
+          {/* The rows whose quantity is not a quantity. Shown with the row
+              they came from, because the fix is in the workbook. */}
+          {p.unreadable && p.unreadable.length > 0 && (
+            <div className="mt-4 rounded-lg border border-red-200 overflow-hidden">
+              <div className="bg-red-50 px-3 py-2">
+                <div className="text-sm font-medium text-red-800">
+                  ဖတ်မရသော စာကြောင်း {p.unreadableTotal ?? p.unreadable.length} ခု — ထည့်မသွင်းပါ
+                </div>
+                <div className="text-xs text-red-700 mt-0.5">
+                  အရေအတွက် အကွက်မှာ ဂဏန်းမဟုတ်ဘဲ စာ ရေးထားလို့ ပေါင်းလို့ မရပါ။
+                  Excel မှာ ပြင်ပြီး ပြန်တင်ပါ။
+                </div>
+              </div>
+              <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-white text-slate-500 sticky top-0">
+                    <tr>
+                      <th className="px-3 py-1.5 text-left font-medium">Sheet</th>
+                      <th className="px-3 py-1.5 text-right font-medium">Row</th>
+                      <th className="px-3 py-1.5 text-left font-medium">Code</th>
+                      <th className="px-3 py-1.5 text-left font-medium">ပစ္စည်း</th>
+                      <th className="px-3 py-1.5 text-left font-medium">Qty</th>
+                      <th className="px-3 py-1.5 text-left font-medium">Ground</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {p.unreadable.map((u, i) => (
+                      <tr key={i} className="border-t border-red-100">
+                        <td className="px-3 py-1.5">{u.sheet}</td>
+                        <td className="px-3 py-1.5 text-right tabular-nums">{u.row}</td>
+                        <td className="px-3 py-1.5 font-medium">{u.code}</td>
+                        <td className="px-3 py-1.5">{u.name}</td>
+                        <td className="px-3 py-1.5 text-red-700">{u.qty || "—"}</td>
+                        <td className="px-3 py-1.5 text-red-700">{u.ground || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {(p.unreadableTotal ?? 0) > p.unreadable.length && (
+                <div className="px-3 py-1.5 text-xs text-red-700 bg-red-50">
+                  ပထမ {p.unreadable.length} ခုကိုပဲ ပြထားပါတယ်။
+                </div>
+              )}
+            </div>
+          )}
 
           {p.unknown.length > 0 && (
             <div className="mt-3 rounded-lg bg-amber-50 p-3">

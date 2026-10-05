@@ -174,6 +174,11 @@ export async function POST(req: NextRequest) {
   // per shop, so this is the shape the person already has in their head —
   // a row of boxes is not.
   let preview: { columns: string[]; rows: (string | number)[][] } | null = null;
+  // Rows that carry a quantity nobody can add up — "3 BOX , 4 PCS", written
+  // where a number belongs. They are not guessed at and they are not thrown
+  // away quietly either: they are listed, with the row they came from, so
+  // the person who wrote them can put them right.
+  const unreadable: { sheet: string; row: number; code: string; name: string; qty: string; ground: string }[] = [];
   let kind = "";
   let usedDate = wantDate;
   let available: string[] = [];
@@ -278,10 +283,22 @@ export async function POST(req: NextRequest) {
         const nameCell = String(g[r]?.[c.desc ?? 2] ?? "").trim();
         if (!code || isTotal(code) || isTotal(nameCell)) continue;
 
+        const rawQty = String(g[r]?.[c.qty ?? 3] ?? "").trim();
+        const rawGround = c.ground == null ? "" : String(g[r]?.[c.ground] ?? "").trim();
         const sq = plain(g[r]?.[c.qty ?? 3]);
         const gq = c.ground == null ? null : plain(g[r]?.[c.ground]);
         const price = c.price == null ? 0 : plain(g[r]?.[c.price]) ?? 0;
-        if (sq == null && gq == null) continue;
+        if (sq == null && gq == null) {
+          // Blank is a row nobody filled in; text is a row somebody filled
+          // in with something the arithmetic cannot use.
+          if (rawQty || rawGround) {
+            unreadable.push({
+              sheet: name, row: r + 1, code, name: nameCell,
+              qty: rawQty, ground: rawGround,
+            });
+          }
+          continue;
+        }
 
         sku++; sSku++;
         sysQty += sq ?? 0; sSys += sq ?? 0;
@@ -327,6 +344,7 @@ export async function POST(req: NextRequest) {
     fixed.over_value = over;
     fixed.net_value = short - over;
     fixed.negative_sku = neg;
+    fixed.unreadable_sku = unreadable.length;
     fixed.accuracy_pct = matched + diffs.length
       ? Math.round((matched / (matched + diffs.length)) * 1000) / 10 : 0;
 
@@ -371,8 +389,16 @@ export async function POST(req: NextRequest) {
         const code = String(g[r]?.[c.code ?? 1] ?? "").trim();
         const pname = String(g[r]?.[c.desc ?? 2] ?? "").trim();
         if (!code || isTotal(code) || isTotal(pname)) continue;
+        const rawClose = String(g[r]?.[c.closing ?? 3] ?? "").trim();
         const close = plain(g[r]?.[c.closing ?? 3]);
-        if (close == null) continue;
+        if (close == null) {
+          if (rawClose) {
+            unreadable.push({
+              sheet: name, row: r + 1, code, name: pname, qty: rawClose, ground: "",
+            });
+          }
+          continue;
+        }
 
         if (valuation) {
           const unit = plain(g[r]?.[c.unit_amount!]) ?? 0;
@@ -450,6 +476,7 @@ export async function POST(req: NextRequest) {
     fixed.negative_sku = tNeg;
     fixed.negative_value = tNegVal;
     fixed.unbalanced_sku = tUnbal;
+    fixed.unreadable_sku = unreadable.length;
 
     byShop.sort((a, b) => String(a.location).localeCompare(String(b.location)));
     preview = {
@@ -506,5 +533,10 @@ export async function POST(req: NextRequest) {
     return true;
   });
 
-  return NextResponse.json({ kind, date: usedDate, available, sections, fixed, preview, unknown: newOnes });
+  return NextResponse.json({
+    kind, date: usedDate, available, sections, fixed, preview,
+    unreadable: unreadable.slice(0, 100),
+    unreadableTotal: unreadable.length,
+    unknown: newOnes,
+  });
 }
