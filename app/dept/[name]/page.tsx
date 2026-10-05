@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import {
   supabase, type ReportForm, type Submission, type FormSection, type FormField,
 } from "@/lib/supabase";
-import { useAuth, isDirector, isManagerTier } from "../../auth-context";
+import { useAuth, isDirector } from "../../auth-context";
 import { photoPaths } from "../../section-block";
 
 type P = { id: string; email: string; role: string; store_id: string | null; is_dept_head: boolean };
@@ -279,7 +279,11 @@ export default function DeptPage() {
                  invoices: t.invoices + c.total.invoices }),
     { target: 0, actual: 0, invoices: 0 }), [channels]);
 
-  const filers = people.filter((p) => !p.is_dept_head && !isManagerTier(p.role));
+  // Everyone in the department is expected to file something except the
+  // director, who only reads. A department head still writes their own
+  // review, so excluding the whole manager tier left departments of one
+  // executive with nobody to count and a "Filed 0/0" badge.
+  const filers = people.filter((p) => !isDirector(p.role));
   // Filed means: opened a report of their own, or filed their part of a
   // shared one, or wrote in a section addressed to them by name.
   const filedBy = new Set(staffSubs.map((s) => s.created_by));
@@ -297,6 +301,8 @@ export default function DeptPage() {
     }
   }
   const notFiled = filers.filter((p) => !filedBy.has(p.email));
+  const label = (p: P) => (p.store_id && stores[p.store_id]) || p.email.split("@")[0];
+  const filedNames = filers.filter((p) => filedBy.has(p.email)).map(label);
 
   const days = range
     ? Math.round(
@@ -408,9 +414,14 @@ export default function DeptPage() {
               ? `Filed ${staffSubs.length}/${expected}`
               : `Filed ${filers.length - notFiled.length}/${filers.length}`}
           </span>
+          {!range && filedNames.length > 0 && (
+            <span className="px-2 py-1 rounded bg-green-50 text-green-700">
+              Filed by: {filedNames.join(" · ")}
+            </span>
+          )}
           {!range && notFiled.length > 0 && (
             <span className="px-2 py-1 rounded bg-amber-50 text-amber-700">
-              Not filed: {notFiled.map((p) => (p.store_id && stores[p.store_id]) || p.email.split("@")[0]).join(" · ")}
+              Not filed: {notFiled.map(label).join(" · ")}
             </span>
           )}
         </div>
