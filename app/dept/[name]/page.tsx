@@ -294,12 +294,21 @@ export default function DeptPage() {
     if (!isShared(s.form_id)) continue;
     const a = (s.answers || {}) as Record<string, unknown>;
     for (const sec of struct[s.form_id] || []) {
-      if (!sec.route_emails?.length) continue;
+      // A section is addressed either to named people or to a role. Only
+      // the first was being credited, so a manager whose review sits on the
+      // report still counted as not having filed.
+      const addressees = [
+        ...(sec.route_emails || []),
+        ...(sec.route_roles?.length
+          ? people.filter((p) => sec.route_roles!.includes(p.role)).map((p) => p.email)
+          : []),
+      ];
+      if (!addressees.length) continue;
       const wrote = sec.fields.some((f) => {
         const v = a[f.key] ?? a[f.id];
         return v != null && String(v).trim() !== "";
       }) || (sec.is_table && Array.isArray(a[sec.id]) && (a[sec.id] as unknown[]).length > 0);
-      if (wrote) sec.route_emails.forEach((e) => filedBy.add(e));
+      if (wrote) addressees.forEach((e) => filedBy.add(e));
     }
   }
   const notFiled = filers.filter((p) => !filedBy.has(p.email));
