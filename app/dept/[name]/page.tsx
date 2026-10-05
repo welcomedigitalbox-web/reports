@@ -98,7 +98,9 @@ export default function DeptPage() {
             : supabase.from("report_submissions").select("*").in("form_id", ids)
                 .eq("report_date", date).not("status", "in", "(draft,archived)"))
         : Promise.resolve({ data: [] }),
-      supabase.from("profiles").select("id,email,role,store_id,is_dept_head").eq("department", name),
+      // profiles is readable only by its owner and by admins, so the roster
+      // comes from a function that answers the org-chart question instead.
+      supabase.rpc("dept_roster", { p_dept: name }),
       supabase.from("stores").select("id,name"),
       ids.length ? supabase.from("report_sections").select("*").in("form_id", ids) : Promise.resolve({ data: [] }),
     ]);
@@ -302,7 +304,14 @@ export default function DeptPage() {
   }
   const notFiled = filers.filter((p) => !filedBy.has(p.email));
   const label = (p: P) => (p.store_id && stores[p.store_id]) || p.email.split("@")[0];
-  const filedNames = filers.filter((p) => filedBy.has(p.email)).map(label);
+  // profiles is read under RLS: a reader who is not an admin sees only their
+  // own row, so the department roster can come back empty. The people who
+  // actually wrote on the report are known from the report itself, so fall
+  // back to those rather than showing a counter of nought out of nought.
+  const roster: P[] = filers.length
+    ? filers
+    : [...filedBy].map((e) => ({ id: e, email: e, role: "", store_id: null, is_dept_head: false }));
+  const filedNames = roster.filter((p) => filedBy.has(p.email)).map(label);
 
   const days = range
     ? Math.round(
@@ -311,7 +320,7 @@ export default function DeptPage() {
     : 1;
   // Over a range, "who has not filed" is a per-day question. What is useful
   // is how many of the days expected actually arrived.
-  const expected = filers.length * days;
+  const expected = roster.length * days;
 
   if (authLoading || loading) return <div className="pt-16 text-center text-sm text-slate-400">…</div>;
   if (!profile) return null;
@@ -412,7 +421,7 @@ export default function DeptPage() {
           <span className="px-2 py-1 rounded bg-slate-100">
             {range
               ? `Filed ${staffSubs.length}/${expected}`
-              : `Filed ${filers.length - notFiled.length}/${filers.length}`}
+              : `Filed ${filedNames.length}/${roster.length}`}
           </span>
           {!range && filedNames.length > 0 && (
             <span className="px-2 py-1 rounded bg-green-50 text-green-700">
