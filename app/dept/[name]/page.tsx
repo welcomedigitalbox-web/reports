@@ -6,6 +6,7 @@ import {
   supabase, type ReportForm, type Submission, type FormSection, type FormField,
 } from "@/lib/supabase";
 import { useAuth, isDirector } from "../../auth-context";
+import DirectorNote from "./director-note";
 import { photoPaths } from "../../section-block";
 
 type P = { id: string; email: string; role: string; store_id: string | null; is_dept_head: boolean };
@@ -342,6 +343,7 @@ export default function DeptPage() {
     <div className="max-w-4xl mx-auto pt-6">
       {isDirector(profile.role) && (
         <button onClick={() => router.push("/dashboard")} className="text-sm text-blue-600 mb-4">← Dashboard</button>
+        <DirectorNote dept={name} date={date} />
       )}
       <div className="flex items-center justify-between mb-5">
         <div>
