@@ -341,10 +341,10 @@ export default function DeptPage() {
 
   return (
     <div className="max-w-4xl mx-auto pt-6">
-      {isDirector(profile.role) && (
+      {isDirector(profile.role) && (<>
         <button onClick={() => router.push("/dashboard")} className="text-sm text-blue-600 mb-4">← Dashboard</button>
         <DirectorNote dept={name} date={date} />
-      )}
+      </>)}
       <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-xl font-semibold capitalize">
