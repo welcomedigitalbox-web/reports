@@ -555,7 +555,7 @@ export default function ReportPage() {
                 <X size={14} /> Send back
               </button>
               <button
-                onClick={() => run(() => supabase.rpc("report_review", { p_submission_id: id }), "Approved")}
+                onClick={() => { const mgr = sections.filter((s) => (s.route_roles || []).some((r) => /manager|head/i.test(r))); const empty = mgr.length > 0 && mgr.every((s) => !s.fields.some((f) => { const a = answers[f.key]; return Array.isArray(a) ? a.length > 0 : a !== undefined && a !== null && a !== ""; })); if (isDirector(profile?.role) && empty && !window.confirm("The department manager has not reviewed this report yet. Approve anyway?")) return; run(() => supabase.rpc("report_review", { p_submission_id: id }), "Approved"); }}
                 disabled={busy}
                 className="px-5 py-2 bg-green-600 disabled:bg-slate-300 text-white rounded-lg text-sm font-semibold flex items-center gap-1.5"
               >
