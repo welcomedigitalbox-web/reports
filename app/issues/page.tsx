@@ -16,6 +16,26 @@ const STATUS = [
   { key: "done", label: "Done", tone: "bg-green-50 text-green-700" },
 ];
 
+// A photo arrives as a storage path, not a picture. The bucket is private,
+// so each one needs a signed link before it can be shown at all.
+const IMG = /\.(png|jpe?g|webp|gif)$/i;
+
+function Shot({ path }: { path: string }) {
+  const [url, setUrl] = useState("");
+  useEffect(() => {
+    let live = true;
+    supabase.storage.from("report-photos").createSignedUrl(path, 3600)
+      .then(({ data }) => { if (live) setUrl(data?.signedUrl || ""); });
+    return () => { live = false; };
+  }, [path]);
+  if (!url) return <span className="text-xs text-slate-400">…</span>;
+  return (
+    <a href={url} target="_blank" rel="noreferrer">
+      <img src={url} alt="" className="h-20 w-auto rounded border border-slate-200" />
+    </a>
+  );
+}
+
 export default function IssuesPage() {
   const [rows, setRows] = useState<Item[]>([]);
   const [filter, setFilter] = useState("open");
@@ -81,7 +101,7 @@ export default function IssuesPage() {
                 {Object.entries(r.item).filter(([, v]) => v !== "" && v != null).map(([k, v]) => (
                   <div key={k}>
                     <dt className="text-xs text-slate-400 capitalize">{k.replace(/_/g, " ")}</dt>
-                    <dd>{String(v)}</dd>
+                    <dd>{IMG.test(String(v)) ? <Shot path={String(v)} /> : String(v)}</dd>
                   </div>
                 ))}
               </dl>
