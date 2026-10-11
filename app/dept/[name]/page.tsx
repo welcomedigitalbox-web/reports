@@ -289,9 +289,9 @@ export default function DeptPage() {
   const filers = people.filter((p) => !isDirector(p.role));
   // Filed means: opened a report of their own, or filed their part of a
   // shared one, or wrote in a section addressed to them by name.
-  const filedBy = new Set(staffSubs.map((s) => s.created_by));
-  for (const x of parts) if (staffSubs.some((s) => s.id === x.submission_id)) filedBy.add(x.email);
-  for (const s of staffSubs) {
+  const filedBy = new Set(subs.map((s) => s.created_by));
+  for (const x of parts) if (subs.some((s) => s.id === x.submission_id)) filedBy.add(x.email);
+  for (const s of subs) {
     if (!isShared(s.form_id)) continue;
     const a = (s.answers || {}) as Record<string, unknown>;
     for (const sec of struct[s.form_id] || []) {
