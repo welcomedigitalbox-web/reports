@@ -25,8 +25,11 @@ export default function ReviewPage() {
   const [tab, setTab] = useState<SubmissionStatus | "all">("submitted");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [who, setWho] = useState("");
-  const [dept, setDept] = useState("");
+  const [who, setWho] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("review_who") || ""));
+  const [dept, setDept] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("review_dept") || ""));
+  // A reviewer looks at the same slice most days, so the page keeps what
+  // they last chose instead of resetting to everything.
+  useEffect(() => { try { localStorage.setItem("review_who", who); localStorage.setItem("review_dept", dept); } catch {} }, [who, dept]);
   const [loading, setLoading] = useState(true);
 
   // The archive is IT's to undo, so it is fetched, shown and restored only
