@@ -486,6 +486,7 @@ export default function ReportPage() {
             stores={stores}
             people={people}
             defaultStore={sub.store_id || profile?.store_id}
+            reviewOpen={["draft", "submitted"].includes(sub.status)}
           />
         );
       })}

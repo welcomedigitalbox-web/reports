@@ -57,6 +57,9 @@ type Props = {
   people: { id: string; email: string }[];
   // The shop this account works from, so a new row starts where they are.
   defaultStore?: string | null;
+  // A manager writes his review while the report is still open. Once it is
+  // approved the report is a signed document, so the box closes with it.
+  reviewOpen?: boolean;
 };
 
 
@@ -443,7 +446,7 @@ export function photoPaths(v: unknown): string[] {
 }
 
 export default function SectionBlock({
-  section, answers, onChange, readOnly, stores, people, defaultStore,
+  section, answers, onChange, readOnly, stores, people, defaultStore, reviewOpen,
 }: Props) {
   // A table section keeps its rows as an array under the section id, so
   // adding a supplier does not need a schema change.
@@ -707,7 +710,7 @@ export default function SectionBlock({
   const managerOnly = /manager review/i.test(section.title || "");
   const isManager = /manager|director|owner|admin|^om$/i.test(role);
 
-  const reviewMode = managerOnly && isManager;
+  const reviewMode = managerOnly && isManager && reviewOpen !== false;
   const [reviewDraft, setReviewDraft] = useState<Record<string, unknown>>({});
   const [savingReview, setSavingReview] = useState(false);
   const [reviewMsg, setReviewMsg] = useState("");
