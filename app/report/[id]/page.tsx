@@ -177,10 +177,20 @@ export default function ReportPage() {
   const stillMineToFill =
     !!form?.is_shared && sub?.status === "submitted" && mine && !myPartFiled;
 
+  // The head of the department may correct a report that is still open -
+  // a wrong figure spotted at night should not wait for the assistant to
+  // retype it. The correction is not quiet: the database writes every
+  // changed field to report_edits with the old value and the editor's name.
+  // Once approved the report is sealed again and an edit request is the way
+  // back in, so an approval always refers to something that stopped moving.
+  const canCorrect =
+    !!sub && approverOk && ["draft", "submitted"].includes(sub.status);
+
   const readOnly =
     !sub ||
-    (sub.status !== "draft" && !stillMineToFill) ||
-    (!mine && !isDirector(profile?.role));
+    (!canCorrect &&
+      ((sub.status !== "draft" && !stillMineToFill) ||
+        (!mine && !isDirector(profile?.role))));
 
   const importable = Object.keys(IMPORT_FORMS).includes(sub?.form_id || "");
   // Nothing typed yet and nothing read in: the file step stands alone.
@@ -455,9 +465,11 @@ export default function ReportPage() {
         // A review that stays editable after the report is signed is not a
         // review — it is a draft anybody can revisit, and the approval
         // underneath it then refers to words that may since have changed.
-        const locked = routed
-          ? !mineToFill || myPartFiled || (readOnly && !canReview)
-          : readOnly;
+        const locked = canCorrect
+          ? false
+          : routed
+            ? !mineToFill || myPartFiled || (readOnly && !canReview)
+            : readOnly;
         const answered = s.fields.some((f) => {
           const a = answers[f.key];
           return a !== undefined && a !== null && a !== "";
