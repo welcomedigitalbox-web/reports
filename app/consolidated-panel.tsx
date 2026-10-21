@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 type Row = {
@@ -23,8 +22,8 @@ type Row = {
 const fmt = (n: number) =>
   new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(n);
 
-export default function ConsolidatedPanel({ date }: { date: string }) {
-  const isOnline = (usePathname() || "").includes("sale_online_daily");
+export default function ConsolidatedPanel({ date, online }: { date: string; online?: boolean }) {
+  const isOnline = !!online;
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
 

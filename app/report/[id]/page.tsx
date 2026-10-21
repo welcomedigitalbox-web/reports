@@ -363,7 +363,7 @@ export default function ReportPage() {
       )}
 
       {["sales_consolidated", "sale_area_daily", "sale_online_daily"].includes(form.id) && (
-        <ConsolidatedPanel date={sub.report_date} />
+        <ConsolidatedPanel online={form.id === "sale_online_daily"} date={sub.report_date} />
       )}
 
       {history.length > 0 && (
