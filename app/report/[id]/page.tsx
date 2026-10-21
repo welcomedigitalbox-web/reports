@@ -362,7 +362,7 @@ export default function ReportPage() {
         </div>
       )}
 
-      {form.id === "sales_consolidated" && (
+      {["sales_consolidated", "sale_area_daily"].includes(form.id) && (
         <ConsolidatedPanel date={sub.report_date} />
       )}
 
