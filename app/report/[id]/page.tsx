@@ -12,6 +12,7 @@ import ExcelImport, { IMPORT_FORMS } from "@/components/ExcelImport";
 import ReconCheck from "@/components/ReconCheck";
 import SectionBlock from "../../section-block";
 import ConsolidatedPanel from "../../consolidated-panel";
+import SourcePanel from "../../source-panel";
 
 function findLabel(node: unknown, id: string): string | undefined {
   if (!node || typeof node !== "object") return;
@@ -364,6 +365,9 @@ export default function ReportPage() {
 
       {["sales_consolidated", "sale_area_daily", "sale_online_daily"].includes(form.id) && (
         <ConsolidatedPanel online={form.id === "sale_online_daily"} date={sub.report_date} />
+      )}
+      {form.id === "sale_online_daily" && (
+        <SourcePanel date={sub.report_date} />
       )}
 
       {history.length > 0 && (
