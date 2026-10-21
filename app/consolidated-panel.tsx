@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 type Row = {
@@ -23,16 +24,36 @@ const fmt = (n: number) =>
   new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(n);
 
 export default function ConsolidatedPanel({ date }: { date: string }) {
+  const isOnline = (usePathname() || "").includes("sale_online_daily");
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let live = true;
     supabase
-      .rpc("sales_consolidated", { p_date: date })
+      .rpc(isOnline ? "online_consolidated" : "sales_consolidated", { p_date: date })
       .then(({ data }) => {
         if (!live) return;
-        setRows((data as Row[]) || []);
+        const got = (data as Record<string, unknown>[]) || [];
+        setRows(
+          isOnline
+            ? got.map((r) => ({
+                store_id: String(r.channel ?? ""),
+                store_name: String(r.channel ?? ""),
+                filed: Boolean(r.filed),
+                status: String(r.status ?? ""),
+                filed_by: (r.filed_by as string) ?? null,
+                daily_target: Number(r.daily_target ?? 0),
+                actual_sale: Number(r.actual_sale ?? 0),
+                invoice_count: Number(r.order_count ?? 0),
+                customers_in: 0,
+                credit_sale: 0,
+                return_count: Number(r.cancelled ?? 0),
+                lost_sale: 0,
+                stockout: (r.stockout as string) ?? null,
+              }))
+            : (got as unknown as Row[])
+        );
         setLoading(false);
       });
     return () => { live = false; };
