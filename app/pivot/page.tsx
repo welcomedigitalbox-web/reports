@@ -34,14 +34,17 @@ export default function PivotPage() {
     let live = true;
     setLoading(true);
     setErr("");
-    supabase
-      .rpc("pivot_rows", { p_from: from, p_to: to })
-      .then(({ data, error }) => {
-        if (!live) return;
-        if (error) setErr(error.message);
-        setRows((data as Row[]) || []);
-        setLoading(false);
-      });
+    Promise.all([
+      supabase.rpc("pivot_rows", { p_from: from, p_to: to }),
+      supabase.rpc("pivot_order_sources", { p_from: from, p_to: to }),
+    ]).then(([a, b]) => {
+      if (!live) return;
+      // Not being allowed the orders is not an error worth showing - the
+      // rest of the page still answers the question it was opened for.
+      if (a.error) setErr(a.error.message);
+      setRows([...((a.data as Row[]) || []), ...((b.data as Row[]) || [])]);
+      setLoading(false);
+    });
     return () => { live = false; };
   }, [from, to]);
 
