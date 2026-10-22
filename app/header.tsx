@@ -51,6 +51,7 @@ export default function Header() {
     ...(isDirector(profile.role) && !filesOwn ? [] : [{ href: "/", label: "My Reports" }]),
     ...(isManagerTier(profile.role) || hasReports ? [{ href: "/review", label: "Review" }] : []),
         ...(isManagerTier(profile.role) || isDirector(profile.role) ? [{ href: "/targets", label: "Target" }] : []),
+        ...(isManagerTier(profile.role) || isDirector(profile.role) ? [{ href: "/pivot", label: "Numbers" }] : []),
     ...(isDirector(profile.role) ? [{ href: "/dashboard", label: "Dashboard" }, { href: "/ask", label: "Ask AI" }] : []),
     ...(profile.email === "admin@edu.com" ? [{ href: "/usage", label: "AI Usage" }] : []),
     ...(isDirector(profile.role) || profile.email === "itadmin@edu.com"
