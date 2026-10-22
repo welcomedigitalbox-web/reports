@@ -86,6 +86,10 @@ export default function PivotPage() {
     return [...grid.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [shown, byDay]);
 
+  const hasPct = metrics.includes("Target") && metrics.includes("Sales");
+  const pct = (c: Record<string, number>) =>
+    c.Target ? `${((c.Sales || 0) / c.Target * 100).toFixed(1)}%` : "-";
+
   const totals = useMemo(() => {
     const t: Record<string, number> = {};
     for (const [, cells] of table)
