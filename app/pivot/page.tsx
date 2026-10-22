@@ -75,13 +75,29 @@ export default function PivotPage() {
   }, [shown]);
 
   // rowKey is what each line of the table stands for: a shop, or a day.
+  // What is owed, and how many dealers are on the books, are true as of a
+  // day - not things that happened during it. Adding them up over a week
+  // counts the same balance every day of that week.
+  const BALANCE = ["Outstanding", "Active dealers"];
+
   const table = useMemo(() => {
     const grid = new Map<string, Record<string, number>>();
+    const asOf = new Map<string, Record<string, string>>();
     for (const r of shown) {
       const key = byDay ? r.day : r.label;
       const cell = grid.get(key) || {};
-      cell[r.metric] = (cell[r.metric] || 0) + Number(r.value || 0);
+      const seen = asOf.get(key) || {};
+      if (BALANCE.includes(r.metric)) {
+        // Keep the latest day's reading, not the running total.
+        if (!seen[r.metric] || r.day >= seen[r.metric]) {
+          cell[r.metric] = Number(r.value || 0);
+          seen[r.metric] = r.day;
+        }
+      } else {
+        cell[r.metric] = (cell[r.metric] || 0) + Number(r.value || 0);
+      }
       grid.set(key, cell);
+      asOf.set(key, seen);
     }
     return [...grid.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [shown, byDay]);
