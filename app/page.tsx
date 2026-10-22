@@ -117,6 +117,7 @@ export default function HomePage() {
           .select("id")
           .eq("form_id", form.id)
           .eq("report_date", pickDate)
+          .eq("store_id", profile?.store_id || null)
           .limit(1)
           .maybeSingle();
         if (already) {
