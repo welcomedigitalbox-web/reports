@@ -158,6 +158,7 @@ export default function PivotPage() {
                 {metrics.map((m) => (
                   <th key={m} className="text-right font-medium p-3 whitespace-nowrap">{m}</th>
                 ))}
+                {hasPct && <th className="text-right font-medium p-3">Achieved</th>}
               </tr>
             </thead>
             <tbody>
@@ -169,6 +170,7 @@ export default function PivotPage() {
                       {cells[m] === undefined ? "-" : fmt(cells[m])}
                     </td>
                   ))}
+                  {hasPct && <td className="p-3 text-right">{pct(cells)}</td>}
                 </tr>
               ))}
               <tr className="border-t border-slate-200 font-medium">
@@ -176,6 +178,7 @@ export default function PivotPage() {
                 {metrics.map((m) => (
                   <td key={m} className="p-3 text-right">{fmt(totals[m] || 0)}</td>
                 ))}
+                {hasPct && <td className="p-3 text-right">{pct(totals)}</td>}
               </tr>
             </tbody>
           </table>
