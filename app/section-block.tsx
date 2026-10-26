@@ -123,7 +123,7 @@ function withEngagement(list: Record<string, unknown>[]) {
     const views = pick("post views", col);
     const parts = ["likes", "comments", "shares"].map((k) => pick(k, col));
     if (!views || views <= 0 || parts.every((x) => x == null)) return null;
-    const sum = parts.reduce((a, b) => a + (b || 0), 0);
+    const sum = parts.reduce<number>((a, b) => a + (b || 0), 0);
     return Math.round((sum / views) * 1000) / 10;
   };
   const now = rate("this_period");
@@ -715,7 +715,8 @@ export default function SectionBlock({
     if (compactTable) {
       // KPI rows: redo the sums here rather than waiting for a pull.
       {
-        const done = next.map((r, idx) => (idx === i ? kpiMath(r) : r));
+        const done = next.map((r, idx) =>
+          (idx === i ? kpiMath(r) : r)) as Record<string, unknown>[];
         const eng = kpiPlatform === "TikTok" ? withEngagement(done) : done;
         onChange(
           section.id,
