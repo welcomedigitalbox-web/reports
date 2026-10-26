@@ -72,6 +72,9 @@ export default function ReportPage() {
   const [history, setHistory] = useState<Record<string, unknown>[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [approverOk, setApproverOk] = useState(false);
+  // Who filed it, so a director can be told when he is approving ahead of
+  // the manager rather than after him.
+  const [filedByRole, setFiledByRole] = useState("");
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
   const [people, setPeople] = useState<{ id: string; email: string }[]>([]);
@@ -145,6 +148,13 @@ export default function ReportPage() {
     );
 
     setApproverOk(!!appr);
+    supabase
+      .from("profiles").select("role")
+      .eq("email", String((s as Submission).created_by))
+      .maybeSingle()
+      .then(({ data: who }) =>
+        setFiledByRole(String((who as { role?: string } | null)?.role || ""))
+      );
 
     setSub(s as Submission);
     setForm(f as ReportForm);
@@ -568,7 +578,27 @@ export default function ReportPage() {
                 <X size={14} /> Send back
               </button>
               <button
-                onClick={() => { const mgr = sections.filter((s) => (s.route_roles || []).some((r) => /manager|head/i.test(r))); const empty = mgr.length > 0 && mgr.every((s) => !s.fields.some((f) => { const a = answers[f.key]; return Array.isArray(a) ? a.length > 0 : a !== undefined && a !== null && a !== ""; })); if (isDirector(profile?.role) && empty && !window.confirm("The department manager has not reviewed this report yet. Approve anyway?")) return; run(() => supabase.rpc("report_review", { p_submission_id: id }), "Approved"); }}
+                onClick={() => {
+                  // A report goes up the line: the person files it, the
+                  // department manager approves, and only then does it reach
+                  // management. Approving out of that order is allowed - a
+                  // manager on leave should not stop the day - but it is said
+                  // out loud first.
+                  const mgr = sections.filter((s) =>
+                    (s.route_roles || []).some((r) => /manager|head/i.test(r)));
+                  const reviewEmpty = mgr.length > 0 && mgr.every((s) =>
+                    !s.fields.some((f) => {
+                      const a = answers[f.key];
+                      return Array.isArray(a) ? a.length > 0 : a !== undefined && a !== null && a !== "";
+                    }));
+                  const filedByStaff = !/manager|head|director|owner|admin/i.test(filedByRole);
+                  const aheadOfManager =
+                    isDirector(profile?.role) && (reviewEmpty || filedByStaff);
+                  if (aheadOfManager && !window.confirm(
+                    "\u1019\u1014\u103a\u1014\u1031\u1002\u103b\u102c approve \u1019\u101c\u102f\u1015\u103a\u101b\u101e\u1031\u1038\u1015\u102b\u104b \u1012\u102c\u1010\u1031\u102c\u1004\u103a approve \u1019\u101c\u102c\u1038?"
+                  )) return;
+                  run(() => supabase.rpc("report_review", { p_submission_id: id }), "Approved");
+                }}
                 disabled={busy}
                 className="px-5 py-2 bg-green-600 disabled:bg-slate-300 text-white rounded-lg text-sm font-semibold flex items-center gap-1.5"
               >
