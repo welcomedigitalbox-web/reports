@@ -1,7 +1,7 @@
 "use client";
 import { useRef, useState, useEffect } from "react";
 
-import { Trash2, Plus, ExternalLink } from "lucide-react";
+import { Trash2, Plus, ExternalLink, Maximize2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { FormField, FormSection } from "@/lib/supabase";
 
@@ -137,7 +137,9 @@ function Field({
   people: Props["people"];
 }) {
   const base =
-    "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm disabled:bg-slate-50 disabled:text-slate-500";
+    "w-full bg-white text-slate-900 border border-slate-300 rounded-lg px-3 py-2 "
+    + "text-[16px] sm:text-sm outline-none focus:border-blue-500 focus:ring-2 "
+    + "focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-500";
   const v = value ?? "";
 
   // A link that has been pasted into a report is there to be followed. The
@@ -169,13 +171,8 @@ function Field({
   switch (field.field_type) {
     case "textarea":
       return (
-        <textarea
-          rows={3}
-          className={base}
-          value={String(v)}
-          disabled={readOnly}
-          onChange={(e) => onChange(e.target.value)}
-        />
+        <BigText label={field.label} multiline base={base}
+                 value={String(v)} readOnly={readOnly} onChange={onChange} />
       );
 
     case "number":
@@ -316,15 +313,63 @@ function Field({
 
     default:
       return (
-        <input
-          type="text"
-          className={base}
-          value={String(v)}
-          disabled={readOnly}
-          onChange={(e) => onChange(e.target.value)}
-        />
+        <BigText label={field.label} multiline={false} base={base}
+                 value={String(v)} readOnly={readOnly} onChange={onChange} />
       );
   }
+}
+
+// In a column a remark box is a few characters wide, and people on a phone
+// give up and write nothing. The box stays where it is; the arrow beside it
+// opens the same answer full size.
+function BigText({
+  value, onChange, readOnly, label, multiline, base,
+}: {
+  value: string;
+  onChange: (v: unknown) => void;
+  readOnly: boolean;
+  label: string;
+  multiline: boolean;
+  base: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <div className="flex items-start gap-1">
+        {multiline ? (
+          <textarea rows={3} className={base} value={value} disabled={readOnly}
+                    onChange={(e) => onChange(e.target.value)} />
+        ) : (
+          <input type="text" className={base} value={value} disabled={readOnly}
+                 onChange={(e) => onChange(e.target.value)} />
+        )}
+        {!readOnly && (
+          <button type="button" onClick={() => setOpen(true)} title={label}
+                  className="shrink-0 px-2 py-2 text-slate-400 hover:text-slate-600">
+            <Maximize2 size={14} />
+          </button>
+        )}
+      </div>
+      {open && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center sm:p-4">
+          <div className="bg-white w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl p-4 shadow-lg">
+            <h3 className="font-medium text-sm mb-2">{label}</h3>
+            <textarea
+              autoFocus
+              rows={8}
+              className="w-full bg-white text-slate-900 border border-slate-300 rounded-lg px-3 py-2 text-[16px] outline-none focus:border-blue-500"
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+            />
+            <button type="button" onClick={() => setOpen(false)}
+              className="w-full mt-3 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold">
+              ပြီးပြီ
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
 
 // A photo of a new product says more than a line of description, so the box
@@ -366,8 +411,9 @@ function FileField({
     setErr("");
     // A phone camera file is several megabytes; anything past ten is a
     // mistake rather than a photo.
-    if (file.size > 10 * 1024 * 1024) {
-      setErr("file is larger than 10MB");
+    const capMb = image ? 10 : 50;
+    if (file.size > capMb * 1024 * 1024) {
+      setErr(`file is larger than ${capMb}MB`);
       return;
     }
     setBusy(true);
@@ -406,7 +452,7 @@ function FileField({
       <div className="flex items-center gap-2">
         <input
           type="file"
-          accept={image ? "image/*" : undefined}
+          accept={image ? "image/*" : "video/*,image/*"}
           className="text-sm"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }}
         />
@@ -793,8 +839,40 @@ export default function SectionBlock({
             );
           })()}
 
+          {gridTable && rows.length > 0 && (
+            <div className="sm:hidden space-y-3">
+              {rows.map((row, i) => (
+                <div key={i} className="border border-slate-200 rounded-lg p-3">
+                  <div className="font-medium text-sm mb-2">
+                    {String(row[section.fields[0].key] ?? "")}
+                  </div>
+                  <div className="space-y-2">
+                    {section.fields.slice(1).map((f) => (
+                      <div key={f.id}>
+                        <label className="text-xs text-slate-500 block mb-1">
+                          {f.label}
+                          {f.label_mm && (
+                            <span className="text-slate-400"> · {f.label_mm}</span>
+                          )}
+                        </label>
+                        <Field
+                          field={f}
+                          value={row[f.key]}
+                          onChange={(v) => setRow(i, f.key, v)}
+                          readOnly={readOnly || COMPUTED.has(f.key)}
+                          stores={stores}
+                          people={people}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {rows.length > 0 && (
-            <table className="w-full text-sm">
+            <table className={`w-full text-sm ${gridTable ? "hidden sm:table" : ""}`}>
               <thead>
                 <tr className="text-left text-slate-500 border-b border-slate-200">
                   {section.fields.map((f) => (
