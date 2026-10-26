@@ -840,7 +840,7 @@ export default function SectionBlock({
           })()}
 
           {gridTable && rows.length > 0 && (
-            <div className="sm:hidden space-y-3">
+            <div className="md:hidden space-y-3">
               {rows.map((row, i) => (
                 <div key={i} className="border border-slate-200 rounded-lg p-3">
                   <div className="font-medium text-sm mb-2">
@@ -872,7 +872,7 @@ export default function SectionBlock({
           )}
 
           {rows.length > 0 && (
-            <table className={`w-full text-sm ${gridTable ? "hidden sm:table" : ""}`}>
+            <table className={`w-full text-sm ${gridTable ? "hidden md:table" : ""}`}>
               <thead>
                 <tr className="text-left text-slate-500 border-b border-slate-200">
                   {section.fields.map((f) => (
