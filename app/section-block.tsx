@@ -110,6 +110,35 @@ function recompute(row: Record<string, unknown>): Record<string, unknown> {
   return out;
 }
 
+
+// TikTok does not report an engagement rate, so the sheet works it out from
+// the rows above it: what people did with a post, over how many saw it.
+function withEngagement(list: Record<string, unknown>[]) {
+  const pick = (name: string, col: string) => {
+    const r = list.find((x) => String(x.kpi || "").trim().toLowerCase() === name);
+    const v = r ? r[col] : null;
+    return v === "" || v == null ? null : Number(v);
+  };
+  const rate = (col: string) => {
+    const views = pick("post views", col);
+    const parts = ["likes", "comments", "shares"].map((k) => pick(k, col));
+    if (!views || views <= 0 || parts.every((x) => x == null)) return null;
+    const sum = parts.reduce((a, b) => a + (b || 0), 0);
+    return Math.round((sum / views) * 1000) / 10;
+  };
+  const now = rate("this_period");
+  const was = rate("last_period");
+  return list.map((r) =>
+    /engagement rate/i.test(String(r.kpi || ""))
+      ? {
+          ...r,
+          ...(now == null ? {} : { this_period: now }),
+          ...(was == null ? {} : { last_period: was }),
+        }
+      : r
+  );
+}
+
 const COMPUTED = new Set([
   ...Object.keys(DERIVED),
   ...Object.keys(QUOTIENT),
@@ -685,7 +714,14 @@ export default function SectionBlock({
 
     if (compactTable) {
       // KPI rows: redo the sums here rather than waiting for a pull.
-      onChange(section.id, next.map((r, idx) => (idx === i ? kpiMath(r) : r)));
+      {
+        const done = next.map((r, idx) => (idx === i ? kpiMath(r) : r));
+        const eng = kpiPlatform === "TikTok" ? withEngagement(done) : done;
+        onChange(
+          section.id,
+          eng.map((r) => (/engagement rate/i.test(String(r.kpi || "")) ? kpiMath(r) : r))
+        );
+      }
       if (key === "kpi" && value) {
         supabase
           .from("report_targets")
