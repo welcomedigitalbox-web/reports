@@ -221,7 +221,7 @@ export default function ReviewPage() {
         </select>
         <select value={who} onChange={(e) => setWho(e.target.value)}
           className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm bg-white">
-          <option value="">အားစုး</option>
+          <option value="">All</option>
           {people.map((m) => (
             <option key={m} value={m}>{m}</option>
           ))}
