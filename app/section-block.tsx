@@ -414,82 +414,158 @@ function FileField({
   image: boolean;
 }) {
   const [busy, setBusy] = useState(false);
-  const [url, setUrl] = useState<string>("");
+  const [urls, setUrls] = useState<Record<string, string>>({});
   const [err, setErr] = useState("");
+
+  // One field, several files: a shelf photographed from both ends, a
+  // short clip beside the picture. The answer holds a list when there is
+  // more than one and a bare path when there is one, so everything filed
+  // before today still reads.
+  const paths: string[] = (() => {
+    const raw = (value || "").trim();
+    if (!raw) return [];
+    if (raw.startsWith("[")) {
+      try {
+        const list = JSON.parse(raw);
+        return Array.isArray(list) ? list.filter(Boolean).map(String) : [];
+      } catch {
+        return [];
+      }
+    }
+    return [raw];
+  })();
+
+  function write(list: string[]) {
+    onChange(list.length === 0 ? "" : list.length === 1 ? list[0] : JSON.stringify(list));
+  }
 
   useEffect(() => {
     let alive = true;
-    if (!value || value.startsWith("http")) {
-      setUrl(value);
-      return;
-    }
-    // The error used to be thrown away, so a photo that could not be
-    // signed showed as nothing at all — no picture and no reason. Saying
-    // so is the difference between "the upload lost my photo" and "ask
-    // whoever runs the database".
-    supabase.storage.from("report-photos").createSignedUrl(value, 3600)
-      .then(({ data, error }) => {
-        if (!alive) return;
-        if (error) { setErr(error.message); setUrl(""); return; }
-        setUrl(data?.signedUrl || "");
+    const want = paths.filter((x) => x && !x.startsWith("http"));
+    const direct = paths.filter((x) => x && x.startsWith("http"));
+    if (direct.length) {
+      setUrls((m) => {
+        const next = { ...m };
+        for (const d of direct) next[d] = d;
+        return next;
       });
+    }
+    if (!want.length) return;
+    Promise.all(
+      want.map((path) =>
+        supabase.storage
+          .from("report-photos")
+          .createSignedUrl(path, 3600)
+          .then(({ data, error }) => ({ path, url: data?.signedUrl || "", error }))
+      )
+    ).then((rows) => {
+      if (!alive) return;
+      const bad = rows.find((r) => r.error);
+      // Saying why a photo is missing is the difference between "the
+      // upload lost it" and "ask whoever runs the database".
+      if (bad?.error) setErr(bad.error.message);
+      setUrls((m) => {
+        const next = { ...m };
+        for (const r of rows) if (r.url) next[r.path] = r.url;
+        return next;
+      });
+    });
     return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
-  async function upload(file: File) {
+  async function uploadMany(files: File[]) {
     setErr("");
     // A phone camera file is several megabytes; anything past ten is a
     // mistake rather than a photo.
     const capMb = image ? 10 : 50;
-    if (file.size > capMb * 1024 * 1024) {
-      setErr(`file is larger than ${capMb}MB`);
-      return;
-    }
+    const added: string[] = [];
     setBusy(true);
-    const ext = file.name.split(".").pop() || "jpg";
-    const path = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${ext}`;
-    const { error } = await supabase.storage.from("report-photos").upload(path, file);
+    for (const file of files) {
+      if (file.size > capMb * 1024 * 1024) {
+        setErr(`${file.name} is larger than ${capMb}MB`);
+        continue;
+      }
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${ext}`;
+      const { error } = await supabase.storage.from("report-photos").upload(path, file);
+      if (error) { setErr(error.message); continue; }
+      added.push(path);
+    }
     setBusy(false);
-    if (error) { setErr(error.message); return; }
-    onChange(path);
+    if (added.length) write([...paths, ...added]);
   }
 
+  const shown = paths.map((path) => ({ path, url: urls[path] || "" }));
+
   if (readOnly) {
-    if (!url) {
+    if (!paths.length) {
       return (
         <span className={`text-sm ${err ? "text-red-600" : "text-slate-400"}`}>
-          {err ? `\u26a0\ufe0f ${err}` : value ? "\u23f3" : "-"}
+          {err ? `\\u26a0\\ufe0f ${err}` : "-"}
         </span>
       );
     }
-    return image ? (
-      // eslint-disable-next-line @next/next/no-img-element
-      <a href={url} target="_blank" rel="noreferrer">
-        <img src={url} alt="" className="h-24 rounded-lg border border-slate-200 object-cover" />
-      </a>
-    ) : (
-      <a href={url} target="_blank" rel="noreferrer" className="text-sm text-blue-600">open</a>
+    return (
+      <div className="flex flex-wrap gap-2">
+        {shown.map(({ path, url }) =>
+          !url ? (
+            <span key={path} className="text-sm text-slate-400">{"\\u23f3"}</span>
+          ) : image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <a key={path} href={url} target="_blank" rel="noreferrer">
+              <img src={url} alt="" className="h-24 rounded-lg border border-slate-200 object-cover" />
+            </a>
+          ) : (
+            <a key={path} href={url} target="_blank" rel="noreferrer" className="text-sm text-blue-600">
+              open
+            </a>
+          )
+        )}
+      </div>
     );
   }
 
   return (
     <div className="space-y-2">
-      {url && image && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={url} alt="" className="h-24 rounded-lg border border-slate-200 object-cover" />
+      {shown.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {shown.map(({ path, url }) => (
+            <div key={path} className="relative">
+              {image && url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={url} alt="" className="h-24 rounded-lg border border-slate-200 object-cover" />
+              ) : (
+                <a href={url || "#"} target="_blank" rel="noreferrer"
+                   className="inline-block text-xs text-blue-600 border border-slate-200 rounded-lg px-3 py-2">
+                  {url ? "open" : "\\u23f3"}
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={() => write(paths.filter((x) => x !== path))}
+                title="remove"
+                className="absolute -top-2 -right-2 bg-white border border-slate-300 rounded-full w-5 h-5 text-xs text-red-600 leading-none"
+              >
+                x
+              </button>
+            </div>
+          ))}
+        </div>
       )}
       <div className="flex items-center gap-2">
         <input
           type="file"
+          multiple
           accept={image ? "image/*" : "video/*,image/*"}
           className="text-sm"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }}
+          onChange={(e) => {
+            const files = Array.from(e.target.files || []);
+            e.target.value = "";
+            if (files.length) uploadMany(files);
+          }}
         />
-        {busy && <span className="text-xs text-slate-400">…</span>}
-        {value && !busy && (
-          <button type="button" onClick={() => onChange("")}
-                  className="text-xs text-red-600">remove</button>
-        )}
+        {busy && <span className="text-xs text-slate-400">{"\\u2026"}</span>}
       </div>
       {err && <p className="text-xs text-red-600">{err}</p>}
     </div>
