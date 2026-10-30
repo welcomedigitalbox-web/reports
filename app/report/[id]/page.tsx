@@ -135,7 +135,7 @@ export default function ReportPage() {
       supabase.from("report_edits").select("*")
         .eq("submission_id", id)
         .order("edited_at", { ascending: false }),
-      supabase.rpc("can_approve_email", { p_email: (s as Submission).created_by }),
+      supabase.rpc("can_review_submission", { p_id: (s as Submission).id }),
     ]);
 
     // On a report several people share, each files their own part. Knowing
