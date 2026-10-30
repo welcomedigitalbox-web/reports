@@ -71,6 +71,20 @@ export default function ReviewPage() {
       .then(({ data }) => setHasReports(Number(data || 0) > 0));
   }, [profile?.id]);
   const [mgrEmails, setMgrEmails] = useState<Set<string>>(new Set());
+  // email -> the manager they answer to, for grouping the filter.
+  const [staffOf, setStaffOf] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    supabase.from("profiles").select("id, email, reports_to").then(({ data }) => {
+      const list = (data as { id: string; email: string; reports_to: string | null }[]) || [];
+      const byId = new Map(list.map((x) => [String(x.id), String(x.email)]));
+      const m = new Map<string, string>();
+      for (const x of list) {
+        if (!x.email) continue;
+        m.set(String(x.email), x.reports_to ? byId.get(String(x.reports_to)) || "" : "");
+      }
+      setStaffOf(m);
+    });
+  }, []);
   useEffect(() => {
     supabase.from("profiles").select("email, role").then(({ data }) => {
       setMgrEmails(new Set(
@@ -143,10 +157,25 @@ export default function ReviewPage() {
     setTimeout(() => setMsg(""), 4000);
   }
 
+  // Everyone whose reports this viewer can see at all: the staff list plus
+  // anyone who has filed something, in case a profile has since gone.
   const people = useMemo(() => {
     const set = new Set(rows.map((r) => String(r.created_by)).filter(Boolean));
+    for (const e of staffOf.keys()) set.add(e);
     return Array.from(set).sort();
-  }, [rows]);
+  }, [rows, staffOf]);
+
+  // The same names, under the manager each one answers to.
+  const peopleGroups = useMemo(() => {
+    const g = new Map<string, string[]>();
+    for (const e of people) {
+      const head = staffOf.get(e) || "";
+      const key = head || "\u2014";
+      if (!g.has(key)) g.set(key, []);
+      g.get(key)!.push(e);
+    }
+    return Array.from(g.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [people, staffOf]);
 
   // The number on a tab counts what that tab would actually show with the
   // filters as they are. A count that ignores them sends people clicking into
@@ -222,8 +251,12 @@ export default function ReviewPage() {
         <select value={who} onChange={(e) => setWho(e.target.value)}
           className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm bg-white">
           <option value="">All</option>
-          {people.map((m) => (
-            <option key={m} value={m}>{m}</option>
+          {peopleGroups.map(([head, list]) => (
+            <optgroup key={head} label={head === "\u2014" ? "no manager" : head}>
+              {list.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </optgroup>
           ))}
         </select>
         {(from || to || who || dept) && (
