@@ -212,7 +212,6 @@ export default function ReportPage() {
   const canReview = useMemo(() => {
     if (!sub || !form || !profile) return false;
     if (sub.status !== "submitted") return false;
-    if (sub.created_by === profile.email && !isDirector(profile.role)) return false;
     return approverOk;
   }, [sub, form, profile, approverOk]);
 
