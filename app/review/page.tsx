@@ -74,13 +74,12 @@ export default function ReviewPage() {
   // email -> the manager they answer to, for grouping the filter.
   const [staffOf, setStaffOf] = useState<Map<string, string>>(new Map());
   useEffect(() => {
-    supabase.from("profiles").select("id, email, reports_to").then(({ data }) => {
-      const list = (data as { id: string; email: string; reports_to: string | null }[]) || [];
-      const byId = new Map(list.map((x) => [String(x.id), String(x.email)]));
+    supabase.rpc("staff_directory").then(({ data }) => {
+      const list = (data as { email: string; manager_email: string | null }[]) || [];
       const m = new Map<string, string>();
       for (const x of list) {
         if (!x.email) continue;
-        m.set(String(x.email), x.reports_to ? byId.get(String(x.reports_to)) || "" : "");
+        m.set(String(x.email), String(x.manager_email || ""));
       }
       setStaffOf(m);
     });
