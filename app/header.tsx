@@ -56,7 +56,9 @@ export default function Header() {
     ...(profile.email === "admin@edu.com" ? [{ href: "/usage", label: "AI Usage" }] : []),
     ...(isDirector(profile.role) || profile.email === "itadmin@edu.com"
       ? [{ href: "/filing", label: "Filing" }] : []),
-    ...(isDirector(profile.role) ? [] : reads.map((d) => ({
+    ...(isDirector(profile.role) || profile.department === "marketing"
+      ? []
+      : reads.map((d) => ({
       href: `/dept/${d}`,
       label: `${d === "sale" ? "Sales" : d.charAt(0).toUpperCase() + d.slice(1)} reports`,
     }))),

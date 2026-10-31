@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "../auth-context";
 
 type Row = {
   day: string;
@@ -22,6 +23,10 @@ const daysAgo = (n: number) => {
 };
 
 export default function PivotPage() {
+  const { profile } = useAuth();
+  // Figures a department has no business acting on are not shown to it.
+  const hideKinds =
+    profile?.department === "marketing" ? ["Warehouse"] : [];
   const [from, setFrom] = useState(daysAgo(6));
   const [to, setTo] = useState(iso(new Date()));
   const [rows, setRows] = useState<Row[]>([]);
@@ -50,8 +55,10 @@ export default function PivotPage() {
 
   // Which groups there is anything to show for — no empty tabs.
   const kinds = useMemo(
-    () => [...new Set(rows.map((r) => r.kind))].sort(),
-    [rows]
+    () => [...new Set(rows.map((r) => r.kind))]
+      .filter((k) => !hideKinds.includes(k))
+      .sort(),
+    [rows, hideKinds]
   );
 
   // Default to whatever the person is allowed to see, rather than to a tab
