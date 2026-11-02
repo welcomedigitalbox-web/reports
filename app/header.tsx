@@ -58,7 +58,7 @@ export default function Header() {
       ? [{ href: "/filing", label: "Filing" }] : []),
     ...(isDirector(profile.role)
       ? []
-      : reads.filter((d) => d === profile.department).map((d) => ({
+      : reads.filter((d) => d === profile.department || profile.department === "office").map((d) => ({
       href: `/dept/${d}`,
       label: `${d === "sale" ? "Sales" : d.charAt(0).toUpperCase() + d.slice(1)} reports`,
     }))),
