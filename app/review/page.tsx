@@ -161,7 +161,7 @@ export default function ReviewPage() {
   const people = useMemo(() => {
     const set = new Set(rows.map((r) => String(r.created_by)).filter(Boolean));
     for (const e of staffOf.keys()) set.add(e);
-    return Array.from(set).sort();
+    return Array.from(set).filter((e) => staffOf.has(e)).sort();
   }, [rows, staffOf]);
 
   // The same names, under the manager each one answers to.
