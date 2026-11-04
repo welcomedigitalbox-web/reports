@@ -111,10 +111,17 @@ export default function ReviewPage() {
 
   // A request is a decision too, so it sits with the waiting pile rather
   // than in a queue of its own that nobody opens.
+  // Only the people this viewer answers for. A department-wide read is
+  // for looking things up, not a queue of other teams' work.
+  const ownRows = useMemo(
+    () => (staffOf.size ? rows.filter((r) => staffOf.has(String(r.created_by))) : rows),
+    [rows, staffOf]
+  );
+
   const visible = useMemo(() => {
     const seen = isDirector(profile?.role)
-      ? rows.filter((r) => r.status !== "submitted" || mgrEmails.has(String(r.created_by)) || officeForms.has(r.form_id))
-      : rows;
+      ? ownRows.filter((r) => r.status !== "submitted" || mgrEmails.has(String(r.created_by)) || officeForms.has(r.form_id))
+      : ownRows;
     let out = seen;
     if (tab === "submitted") {
       out = out.filter((r) =>
@@ -181,8 +188,8 @@ export default function ReviewPage() {
   // an empty list.
   const counts = useMemo(() => {
     let rows2 = isDirector(profile?.role)
-      ? rows.filter((r) => r.status !== "submitted" || mgrEmails.has(String(r.created_by)) || officeForms.has(r.form_id))
-      : rows;
+      ? ownRows.filter((r) => r.status !== "submitted" || mgrEmails.has(String(r.created_by)) || officeForms.has(r.form_id))
+      : ownRows;
     if (from) rows2 = rows2.filter((r) => String(r.report_date) >= from);
     if (to) rows2 = rows2.filter((r) => String(r.report_date) <= to);
     if (who) rows2 = rows2.filter((r) => String(r.created_by) === who);
