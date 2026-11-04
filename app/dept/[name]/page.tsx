@@ -123,7 +123,15 @@ export default function DeptPage() {
       : { data: [] };
     setParts((pt as { submission_id: string; email: string }[]) || []);
 
-    setForms(fs); setSubs((s as Submission[]) || []); setPeople((p as P[]) || []);
+    // Who this viewer answers for: himself and everyone under him. A
+    // department read is wider than that, and counting the whole of it
+    // marked a manager short for work that was never his to chase.
+    const { data: dir } = await supabase.rpc("staff_directory");
+    const mine = new Set(((dir as { email: string }[]) || []).map((x) => String(x.email)));
+    const keep = (e: string) => mine.size === 0 || mine.has(e);
+    setForms(fs);
+    setSubs((((s as Submission[]) || []).filter((x) => keep(String(x.created_by)))));
+    setPeople((((p as P[]) || []).filter((x) => keep(String(x.email)))));
     setStruct(map);
     setStores(Object.fromEntries(((st as { id: string; name: string }[]) || []).map((x) => [x.id, x.name])));
     const { data: br } = await supabase.from("report_branches").select("id,name,kind");
