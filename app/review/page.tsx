@@ -114,7 +114,7 @@ export default function ReviewPage() {
   // Only the people this viewer answers for. A department-wide read is
   // for looking things up, not a queue of other teams' work.
   const ownRows = useMemo(
-    () => (staffOf.size ? rows.filter((r) => staffOf.has(String(r.created_by))) : rows),
+    () => (staffOf.size > 1 ? rows.filter((r) => staffOf.has(String(r.created_by))) : rows),
     [rows, staffOf]
   );
 
