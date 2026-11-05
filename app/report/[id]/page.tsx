@@ -484,7 +484,10 @@ export default function ReportPage() {
           return a !== undefined && a !== null && a !== "";
         });
         // A private section never leaves the person it is addressed to.
-        if (!mineToFill && (s.private_to_route || !answered)) return null;
+        // Named readers see a private section once it has been written,
+        // but it stays locked to them.
+        const mayRead = ((s as any).read_emails || []).includes(profile?.email || "");
+        if (!mineToFill && !mayRead && (s.private_to_route || !answered)) return null;
         return (
           <SectionBlock
             key={s.id}
