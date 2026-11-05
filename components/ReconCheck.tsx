@@ -20,6 +20,7 @@ export default function ReconCheck({
   const notes: string[] = [];
 
   if (formId === "cash_daily") {
+    return null;
     const open = n(answers.main_opening);
     const inc = sum("Main Cashbook · ငွေဝင်", "amount");
     const out = sum("Main Cashbook · ငွေထွက်", "amount");
