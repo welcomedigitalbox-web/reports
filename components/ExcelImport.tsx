@@ -30,9 +30,6 @@ const FIXED_LABEL: Record<string, string> = {
 // The forms that are filled from a workbook rather than typed. Naming them
 // here is what lets a report open at its file instead of at an empty form.
 export const IMPORT_FORMS: Record<string, string> = {
-  cash_daily: "Cashbook",
-  sale_income_daily: "Daily Sale & Income",
-  purchase_payable_daily: "Purchase & Payable",
   inventory_daily: "Inventory Management Report",
   inventory_monthly: "Monthly Closing Stock",
 };
